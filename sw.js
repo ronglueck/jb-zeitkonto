@@ -75,3 +75,34 @@ self.addEventListener("fetch", event => {
     );
   }
 });
+
+/* ============================================================
+   PUSH-ERINNERUNG — additiv (install/activate/fetch unveraendert)
+============================================================ */
+
+self.addEventListener("push", event => {
+  event.waitUntil(
+    self.registration.showNotification("Zeitkonto", {
+      body: "⏰ Heute noch keine Zeit erfasst – bis 20 Uhr eintragen?",
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-192.png",
+      tag: "zeitkonto-reminder",
+      data: { url: "./" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "./";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url && client.url.startsWith(self.registration.scope) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(target);
+    })
+  );
+});

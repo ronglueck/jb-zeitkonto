@@ -5,3 +5,7 @@ desktop.ini
 
 # Claude Code – lokale Sitzungs-/Projektdaten nicht veröffentlichen
 .claude/
+
+# Cloudflare Worker – lokale Build-/Tool-Dateien
+worker/node_modules/
+.wrangler/

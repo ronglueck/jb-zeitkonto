@@ -315,6 +315,29 @@
   <div class="sollgrid" id="sollGrid"></div>
   <p class="hint">Das Soll legt fest, ab wann Mehr- oder Minusstunden entstehen. Voreingestellt: Mo–Do je 7:30 Std, Fr 5:00 Std (= 35:00 Std/Woche).</p>
 
+  <!-- === Erinnerung (Push) — wird ausgeblendet wenn PUSH_CONFIG leer === -->
+  <div class="divider" id="pushDivider"></div>
+  <div id="pushSection">
+    <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Erinnerung</label>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <span style="flex:1;font-size:14px">Tägliche Erinnerung um 20 Uhr</span>
+      <label style="position:relative;display:inline-block;width:44px;height:26px;flex:0 0 auto">
+        <input type="checkbox" id="pushToggle" style="opacity:0;width:0;height:0;position:absolute">
+        <span id="pushTrack" style="
+          position:absolute;inset:0;border-radius:99px;cursor:pointer;
+          background:var(--line);transition:background .2s;
+        "></span>
+        <span id="pushThumb" style="
+          position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+          background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);
+          transition:transform .2s;pointer-events:none;
+        "></span>
+      </label>
+    </div>
+    <p class="hint" style="margin-top:0">Wenn bis 20 Uhr kein Zeiteintrag erfasst wurde, erhältst du eine Push-Benachrichtigung.</p>
+  </div>
+  <!-- === Ende Erinnerung === -->
+
   <div class="divider"></div>
   <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Daten sichern</label>
   <div class="seg">
@@ -597,6 +620,7 @@ $("saveDay").onclick=()=>{
   if(toMin(e.end) <= toMin(e.start)){ toast("Ende muss nach dem Beginn liegen"); return; }
   if((e.bStart&&!e.bEnd)||(!e.bStart&&e.bEnd)){ toast("Pause braucht Anfang und Ende"); return; }
   state.entries[editKey]=e; saveState(); hideSheets(); render(); toast("Gespeichert");
+  pushHeartbeat(); // fire-and-forget nach erfolgreichem Tag-Speichern
 };
 $("delDay").onclick=()=>{
   if(state.entries[editKey]){ delete state.entries[editKey]; saveState(); hideSheets(); render(); toast("Gelöscht"); }
@@ -695,6 +719,175 @@ if ('serviceWorker' in navigator) {
     location.reload();
   });
 }
+</script>
+
+<!-- ============================================================
+     PUSH-ERINNERUNG — additiv, isoliert
+     Vom Nutzer ausfuellen: workerUrl und vapidPublicKey.
+     Solange leer: Feature ist inert (Toggle ausgeblendet, keine Netz-Calls).
+============================================================ -->
+<script>
+"use strict";
+
+/* ---- Konfiguration (vom Nutzer ausfuellen) ---- */
+const PUSH_CONFIG = {
+  workerUrl: "",          // z. B. "https://zeitkonto-push.sub.workers.dev"
+  vapidPublicKey: ""      // base64url-VAPID-Public-Key (vom Worker)
+};
+
+/* ---- Hilfsfunktionen ---- */
+
+// Standard-Konvertierungshelfer fuer VAPID-Key
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+const PUSH_KEY = "zeitkonto_push_v1";
+
+function loadPushState() {
+  try {
+    const raw = localStorage.getItem(PUSH_KEY);
+    return raw ? JSON.parse(raw) : { enabled: false, endpoint: null };
+  } catch (e) { return { enabled: false, endpoint: null }; }
+}
+
+function savePushState(ps) {
+  try { localStorage.setItem(PUSH_KEY, JSON.stringify(ps)); } catch (e) {}
+}
+
+/* ---- Toggle-UI ---- */
+
+function pushConfigActive() {
+  return !!(PUSH_CONFIG.workerUrl && PUSH_CONFIG.vapidPublicKey);
+}
+
+function updateToggleVisual(enabled) {
+  const track = document.getElementById("pushTrack");
+  const thumb = document.getElementById("pushThumb");
+  const chk   = document.getElementById("pushToggle");
+  if (!track || !thumb || !chk) return;
+  chk.checked = enabled;
+  track.style.background = enabled ? "var(--brand)" : "var(--line)";
+  thumb.style.transform   = enabled ? "translateX(18px)" : "translateX(0)";
+}
+
+function initPushUI() {
+  const section  = document.getElementById("pushSection");
+  const divider  = document.getElementById("pushDivider");
+  const toggle   = document.getElementById("pushToggle");
+  if (!section || !divider || !toggle) return;
+
+  if (!pushConfigActive()) {
+    // Feature inert: Sektion ausblenden, kein Fehler
+    section.style.display = "none";
+    divider.style.display = "none";
+    return;
+  }
+
+  const ps = loadPushState();
+  updateToggleVisual(ps.enabled);
+
+  toggle.addEventListener("change", async () => {
+    if (toggle.checked) {
+      await pushSubscribe();
+    } else {
+      await pushUnsubscribe();
+    }
+  });
+}
+
+/* ---- Subscribe ---- */
+
+async function pushSubscribe() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      toast("Push wird von diesem Browser nicht unterstuetzt");
+      updateToggleVisual(false);
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") {
+      toast("Benachrichtigungen wurden abgelehnt");
+      updateToggleVisual(false);
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    // Vorhandenes Abo verwerfen (z. B. nach VAPID-Key-Wechsel), sonst wirft subscribe()
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) { try { await existing.unsubscribe(); } catch (e) {} }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(PUSH_CONFIG.vapidPublicKey)
+    });
+    // fire-and-forget
+    fetch(PUSH_CONFIG.workerUrl + "/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON() })
+    }).catch(() => {});
+    const ps = { enabled: true, endpoint: sub.endpoint };
+    savePushState(ps);
+    updateToggleVisual(true);
+    toast("Erinnerung aktiviert");
+  } catch (e) {
+    toast("Erinnerung konnte nicht aktiviert werden");
+    updateToggleVisual(false);
+  }
+}
+
+/* ---- Unsubscribe ---- */
+
+async function pushUnsubscribe() {
+  try {
+    const ps = loadPushState();
+    if (ps.endpoint) {
+      // fire-and-forget
+      fetch(PUSH_CONFIG.workerUrl + "/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: ps.endpoint })
+      }).catch(() => {});
+    }
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+    }
+    savePushState({ enabled: false, endpoint: null });
+    updateToggleVisual(false);
+    toast("Erinnerung deaktiviert");
+  } catch (e) {
+    savePushState({ enabled: false, endpoint: null });
+    updateToggleVisual(false);
+  }
+}
+
+/* ---- Heartbeat ---- */
+
+function pushHeartbeat() {
+  if (!pushConfigActive()) return;
+  try {
+    const ps = loadPushState();
+    if (!ps.enabled || !ps.endpoint) return;
+    // Pruefen: hat heute ein Eintrag mit start UND end?
+    const todayKey = ymd(new Date());
+    const e = state.entries[todayKey];
+    if (!e || !e.start || !e.end) return;
+    // fire-and-forget
+    fetch(PUSH_CONFIG.workerUrl + "/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: ps.endpoint, date: todayKey })
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+/* ---- Initialisierung ---- */
+initPushUI();
+pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) definiert
 </script>
 </body>
 </html>

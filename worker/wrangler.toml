@@ -1,0 +1,46 @@
+name            = "zeitkonto-push"
+main            = "worker.js"
+compatibility_date = "2026-06-23"
+
+# ---------------------------------------------------------------------------
+# Cron-Trigger: laueft 18 UTC (= 20 CEST, Sommer) und 19 UTC (= 20 CET, Winter).
+# Der Worker prueft selbst, ob Berlin-Stunde === 20, und sendet nur einmal.
+# ---------------------------------------------------------------------------
+[triggers]
+crons = ["0 18 * * *", "0 19 * * *"]
+
+# ---------------------------------------------------------------------------
+# KV-Namespace
+# Erstellen:  wrangler kv namespace create PUSH_KV
+#             -> gibt die id aus; hier eintragen.
+# Vorschau:   wrangler kv namespace create PUSH_KV --preview
+#             -> preview_id hier eintragen (fuer wrangler dev --remote).
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding    = "PUSH_KV"
+id         = "PLACEHOLDER_KV_ID"          # <- 'wrangler kv namespace create PUSH_KV' -> id hier eintragen
+# preview_id = "PLACEHOLDER_KV_PREVIEW_ID" # <- optional fuer lokale Entwicklung mit --remote
+
+# ---------------------------------------------------------------------------
+# Oeffentliche Variablen (keine Secrets)
+# VAPID_PRIVATE_KEY NICHT hier eintragen — stattdessen:
+#   wrangler secret put VAPID_PRIVATE_KEY
+# ---------------------------------------------------------------------------
+[vars]
+VAPID_PUBLIC_KEY = "PLACEHOLDER_VAPID_PUBLIC_KEY"
+# base64url-codierter 65-Byte uncompressed P-256-Punkt (beginnt nach Decode mit 0x04).
+# Erzeugen z.B. mit: npx web-push generate-vapid-keys
+# Denselben Wert in index.html -> PUSH_CONFIG.vapidPublicKey eintragen.
+
+VAPID_SUBJECT    = "mailto:h1n15r15@gmail.com"
+# RFC-8292: mailto: oder https: URI des Betreibers.
+
+ALLOW_ORIGIN     = "https://ronglueck.github.io"
+# CORS Access-Control-Allow-Origin. Auf konkrete Origin setzen (nicht "*"),
+# damit Preflight-Schutz greift.
+
+# ---------------------------------------------------------------------------
+# Secret (nach dem Deploy setzen, NICHT in diese Datei schreiben):
+#   wrangler secret put VAPID_PRIVATE_KEY
+#   -> base64url-codierter 32-Byte d-Wert des P-256-Schluessels eingeben.
+# ---------------------------------------------------------------------------
