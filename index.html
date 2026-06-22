@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1b24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="color-scheme" content="light">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<title>Stundenbuch</title>
+<style>
+  :root{
+    --paper:#eef1f4;
+    --card:#ffffff;
+    --ink:#14202b;
+    --muted:#64727f;
+    --faint:#9aa6b1;
+    --line:#e1e6ec;
+    --line2:#eef1f5;
+    --brand:#0f6e5a;       /* Plus / positiv */
+    --brand-soft:#e4f1ed;
+    --minus:#b4321f;       /* Minus / negativ */
+    --minus-soft:#fbe9e6;
+    --bar:#0f1b24;         /* Topbar / Bottombar */
+    --bar-ink:#dfe6ec;
+    --accent:#caa64a;      /* Stempel-Akzent */
+    --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --shadow:0 1px 2px rgba(20,32,43,.06),0 8px 24px rgba(20,32,43,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:calc(86px + env(safe-area-inset-bottom));
+  }
+  .tabnum{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+
+  /* ---------- Topbar ---------- */
+  .top{
+    position:sticky;top:0;z-index:30;
+    background:var(--bar);color:var(--bar-ink);
+    padding:calc(12px + env(safe-area-inset-top)) 18px 12px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .top .mark{
+    width:34px;height:34px;border-radius:8px;flex:0 0 auto;
+    background:linear-gradient(150deg,#16323a,#0c161d);
+    border:1px solid rgba(202,166,74,.45);
+    display:grid;place-items:center;color:var(--accent);
+    font-weight:800;font-size:15px;letter-spacing:.5px;
+  }
+  .top h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px;line-height:1.1}
+  .top .emp{font-size:12px;color:#8ea0ad;margin-top:2px;line-height:1.1}
+  .top .grow{flex:1}
+  .iconbtn{
+    appearance:none;border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.06);color:var(--bar-ink);
+    width:38px;height:38px;border-radius:9px;font-size:17px;cursor:pointer;
+    display:grid;place-items:center;
+    position:relative;
+  }
+  .iconbtn:active{transform:translateY(1px)}
+  .iconbtn::after{
+    content:"";position:absolute;top:50%;left:50%;
+    width:48px;height:48px;transform:translate(-50%,-50%);
+  }
+
+  /* ---------- Monatswähler ---------- */
+  .monthbar{
+    display:flex;align-items:center;gap:10px;
+    padding:14px 16px 4px;
+  }
+  .monthbar button{
+    appearance:none;border:1px solid var(--line);background:var(--card);
+    width:40px;height:40px;border-radius:10px;font-size:18px;color:var(--ink);
+    cursor:pointer;box-shadow:var(--shadow);
+    position:relative;
+  }
+  .monthbar button:active{transform:translateY(1px)}
+  .monthbar button::after{
+    content:"";position:absolute;top:50%;left:50%;
+    width:48px;height:48px;transform:translate(-50%,-50%);
+  }
+  .monthbar .label{flex:1;text-align:center}
+  .monthbar .label .m{font-size:19px;font-weight:700;letter-spacing:.2px}
+  .monthbar .label .y{font-size:12px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+
+  .wrap{padding:8px 14px 18px;max-width:620px;margin:0 auto}
+
+  /* ---------- Wochenkarte ---------- */
+  .week{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    margin-top:14px;box-shadow:var(--shadow);overflow:hidden;
+  }
+  .week-head{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px;border-bottom:1px solid var(--line2);
+    background:linear-gradient(180deg,#fbfcfd,#f4f7f9);
+  }
+  .kw{
+    font-size:11px;font-weight:800;letter-spacing:1px;color:var(--muted);
+    text-transform:uppercase;
+  }
+  .kw .range{display:block;font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.3px;margin-top:2px;text-transform:none}
+  .week-head .grow{flex:1}
+  .week-sum{text-align:right}
+  .week-sum .h{font-size:15px;font-weight:700}
+  .badge{
+    display:inline-block;margin-top:3px;padding:2px 8px;border-radius:999px;
+    font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
+    font-family:var(--mono);
+  }
+  .badge.pos{background:var(--brand-soft);color:var(--brand)}
+  .badge.neg{background:var(--minus-soft);color:var(--minus)}
+  .badge.zero{background:#eef1f5;color:var(--muted)}
+
+  /* ---------- Tageszeile ---------- */
+  .day{
+    display:flex;align-items:center;gap:12px;width:100%;
+    padding:11px 14px;border:0;background:none;text-align:left;cursor:pointer;
+    border-bottom:1px solid var(--line2);
+  }
+  .day:last-child{border-bottom:0}
+  .day:active{background:#f6f8fa}
+  .day.out{opacity:.5}
+  .day.today .dow{color:var(--brand)}
+  .daydate{flex:0 0 50px}
+  .dow{font-size:13px;font-weight:800;letter-spacing:.5px}
+  .dom{font-size:12px;color:var(--muted);font-family:var(--mono)}
+  .daytimes{flex:1;min-width:0}
+  .times{font-size:13.5px;color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty{font-size:13px;color:var(--faint)}
+  .note{font-size:11.5px;color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dayright{flex:0 0 auto;text-align:right}
+  .net{font-size:14px;font-weight:700;font-family:var(--mono)}
+  .diff{font-size:11.5px;font-weight:700;font-family:var(--mono);margin-top:1px}
+  .diff.pos{color:var(--brand)}
+  .diff.neg{color:var(--minus)}
+  .diff.zero{color:var(--faint)}
+
+  /* ---------- Bottom-Leiste ---------- */
+  .bottom{
+    position:fixed;left:0;right:0;bottom:0;z-index:30;
+    background:var(--bar);color:var(--bar-ink);
+    display:flex;
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    gap:10px;
+    box-shadow:0 -6px 20px rgba(20,32,43,.18);
+  }
+  .cell{flex:1;padding:6px 12px;border-radius:12px;background:rgba(255,255,255,.05)}
+  .cell .k{font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:#8ea0ad}
+  .cell .v{font-size:20px;font-weight:800;font-family:var(--mono);margin-top:3px;line-height:1}
+  .cell .v small{font-size:12px;font-weight:600;color:#8ea0ad;margin-left:4px;font-family:var(--sans)}
+  .cell .v.pos{color:#5fd0b3}
+  .cell .v.neg{color:#f4a79b}
+
+  /* ---------- Sheet ---------- */
+  .scrim{
+    position:fixed;inset:0;background:rgba(10,18,24,.5);z-index:40;
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+  }
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:var(--paper);border-radius:20px 20px 0 0;
+    transform:translateY(102%);transition:transform .26s cubic-bezier(.22,.9,.3,1);
+    max-height:92vh;overflow:auto;
+    padding:6px 18px calc(20px + env(safe-area-inset-bottom));
+    max-width:620px;margin:0 auto;
+  }
+  .sheet.show{transform:translateY(0)}
+  .grip{width:40px;height:4px;border-radius:99px;background:#cdd5dd;margin:10px auto 8px}
+  .sheet h2{font-size:18px;margin:4px 0 2px}
+  .sheet .sub{font-size:13px;color:var(--muted);margin:0 0 14px;font-family:var(--mono)}
+
+  .field{margin-bottom:14px}
+  .field > label{display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  .field input[type=time],.field input[type=text]{
+    width:100%;font-size:17px;padding:12px 12px;border:1px solid var(--line);
+    border-radius:11px;background:var(--card);color:var(--ink);font-family:var(--mono);
+  }
+  .field input[type=text]{font-family:var(--sans)}
+  .field input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+  .row2{display:flex;gap:10px}
+  .row2 .field{flex:1}
+  .pauserow{display:flex;align-items:flex-end;gap:10px}
+  .pauserow .field{flex:1;margin-bottom:0}
+  .linkbtn{appearance:none;border:0;background:none;color:var(--minus);font-size:12.5px;font-weight:700;cursor:pointer;padding:8px 2px}
+
+  .preview{
+    background:var(--card);border:1px solid var(--line);border-radius:13px;
+    padding:12px 14px;margin:6px 0 16px;display:flex;gap:14px;
+  }
+  .preview .p{flex:1;text-align:center}
+  .preview .p .k{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+  .preview .p .v{font-size:19px;font-weight:800;font-family:var(--mono);margin-top:4px}
+  .preview .p .v.pos{color:var(--brand)}
+  .preview .p .v.neg{color:var(--minus)}
+  .preview .sep{width:1px;background:var(--line)}
+
+  .actions{display:flex;gap:10px;margin-top:4px}
+  .btn{
+    flex:1;appearance:none;border:0;border-radius:12px;padding:14px;
+    font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:var(--minus-soft);color:var(--minus);flex:0 0 auto;padding-left:18px;padding-right:18px}
+
+  .seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
+  .sollgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .sollgrid .field{margin-bottom:0}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5;margin:2px 0 16px}
+  .divider{height:1px;background:var(--line);margin:18px 0}
+  .filehidden{display:none}
+  .toast{
+    position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));
+    transform:translateX(-50%) translateY(20px);
+    background:#14202b;color:#eef3f6;padding:10px 16px;border-radius:10px;
+    font-size:13px;z-index:60;opacity:0;transition:all .25s ease;pointer-events:none;
+    box-shadow:var(--shadow);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="mark">SB</div>
+  <div>
+    <h1>Stundenbuch</h1>
+    <div class="emp" id="empLabel">Arbeitgeber einrichten</div>
+  </div>
+  <div class="grow"></div>
+  <button class="iconbtn" id="todayBtn" title="Heute">⊚</button>
+  <button class="iconbtn" id="settingsBtn" title="Einstellungen">⚙</button>
+</header>
+
+<div class="monthbar">
+  <button id="prevM" aria-label="Vorheriger Monat">‹</button>
+  <div class="label">
+    <div class="m" id="monthName">—</div>
+    <div class="y" id="yearName">—</div>
+  </div>
+  <button id="nextM" aria-label="Nächster Monat">›</button>
+</div>
+
+<main class="wrap" id="weeks"></main>
+
+<nav class="bottom">
+  <div class="cell">
+    <div class="k">Diese Woche</div>
+    <div class="v" id="weekTotal">0:00<small>Std</small></div>
+  </div>
+  <div class="cell">
+    <div class="k">Monat Saldo</div>
+    <div class="v" id="monthSaldo">0:00</div>
+  </div>
+</nav>
+
+<!-- Tag-Editor -->
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="daySheet" aria-hidden="true">
+  <div class="grip"></div>
+  <h2 id="dayTitle">Tag</h2>
+  <p class="sub" id="dayMeta"></p>
+
+  <div class="row2">
+    <div class="field"><label>Beginn</label><input type="time" id="fStart"></div>
+    <div class="field"><label>Ende</label><input type="time" id="fEnd"></div>
+  </div>
+
+  <div class="pauserow">
+    <div class="field"><label>Pause von</label><input type="time" id="fBStart"></div>
+    <div class="field"><label>Pause bis</label><input type="time" id="fBEnd"></div>
+  </div>
+  <button class="linkbtn" id="clearBreak">Pause entfernen</button>
+
+  <div class="field"><label>Notiz (optional)</label><input type="text" id="fNote" placeholder="z. B. Arzttermin, Homeoffice …"></div>
+
+  <div class="preview">
+    <div class="p"><div class="k">Ist</div><div class="v" id="pIst">0:00</div></div>
+    <div class="sep"></div>
+    <div class="p"><div class="k">Soll</div><div class="v" id="pSoll">0:00</div></div>
+    <div class="sep"></div>
+    <div class="p"><div class="k">Saldo</div><div class="v" id="pDiff">0:00</div></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn danger" id="delDay">Löschen</button>
+    <button class="btn ghost" id="cancelDay">Abbrechen</button>
+    <button class="btn primary" id="saveDay">Speichern</button>
+  </div>
+</section>
+
+<!-- Einstellungen -->
+<section class="sheet" id="setSheet" aria-hidden="true">
+  <div class="grip"></div>
+  <h2>Einstellungen</h2>
+  <p class="sub">Arbeitgeber &amp; Soll-Zeiten</p>
+
+  <div class="field"><label>Arbeitgeber</label><input type="text" id="sEmp" placeholder="Name des Arbeitgebers"></div>
+
+  <div class="divider"></div>
+  <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Soll-Stunden pro Tag</label>
+  <div class="sollgrid" id="sollGrid"></div>
+  <p class="hint">Das Soll legt fest, ab wann Mehr- oder Minusstunden entstehen. Voreingestellt: Mo–Do je 7:30 Std, Fr 5:00 Std (= 35:00 Std/Woche).</p>
+
+  <div class="divider"></div>
+  <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Daten sichern</label>
+  <div class="seg">
+    <button class="btn ghost" id="exportBtn">Sicherung exportieren</button>
+    <button class="btn ghost" id="importBtn">Sicherung laden</button>
+  </div>
+  <input type="file" id="importFile" class="filehidden" accept="application/json,.json">
+  <p class="hint">Der Export speichert alle Zeiten als Datei zum Archivieren. „Sicherung laden" stellt sie auf diesem oder einem anderen Gerät wieder her.</p>
+
+  <div class="actions">
+    <button class="btn ghost" id="resetBtn" style="color:var(--minus)">Alles zurücksetzen</button>
+    <button class="btn primary" id="saveSet">Fertig</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   MODUL 1 — Datenmodell & Speicher (offline, mit Fallback)
+============================================================ */
+const KEY = "stundenbuch_v1";
+let memFallback = null;
+
+function defaultState(){
+  return {
+    settings:{
+      employer:"",
+      // Soll in Minuten, 1=Mo … 7=So
+      soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0}
+    },
+    entries:{} // "YYYY-MM-DD": {start,bStart,bEnd,end,note}
+  };
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw) return migrate(JSON.parse(raw));
+  }catch(e){ if(memFallback) return memFallback; }
+  return memFallback || defaultState();
+}
+function saveState(){
+  try{ localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch(e){ memFallback = state; }
+}
+function migrate(s){
+  const d = defaultState();
+  s.settings = Object.assign(d.settings, s.settings||{});
+  s.settings.soll = Object.assign(d.settings.soll, s.settings.soll||{});
+  s.entries = s.entries || {};
+  return s;
+}
+let state = loadState();
+
+/* ============================================================
+   MODUL 2 — Rechenkern (Zeit, Soll/Ist, Saldo)
+============================================================ */
+const DOW_SHORT = ["So","Mo","Di","Mi","Do","Fr","Sa"];      // JS getDay()
+const DOW_LONG  = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+
+function pad(n){ return String(n).padStart(2,"0"); }
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function parseYmd(s){ const [y,m,dd]=s.split("-").map(Number); return new Date(y,m-1,dd); }
+function toMin(hhmm){ if(!hhmm) return null; const [h,m]=hhmm.split(":").map(Number); return h*60+m; }
+function isoWeekIdx(d){ return (d.getDay()+6)%7; } // Mo=0 … So=6
+
+// Soll-Index 1..7 (Mo..So)
+function sollKey(d){ const i=isoWeekIdx(d); return i+1; }
+function sollMin(d){ return state.settings.soll[sollKey(d)] ?? 0; }
+
+// Netto-Arbeitszeit eines Eintrags in Minuten (Pause wird abgezogen)
+function netMin(e){
+  if(!e) return 0;
+  const s=toMin(e.start), en=toMin(e.end);
+  if(s==null || en==null) return 0;
+  let net = en - s;
+  const bs=toMin(e.bStart), be=toMin(e.bEnd);
+  if(bs!=null && be!=null) net -= (be - bs);
+  return Math.max(0, net);
+}
+// Saldo eines Tages = Ist − Soll (nur wenn Tag erfasst ist)
+function dayDiff(dateObj, e){ return netMin(e) - sollMin(dateObj); }
+
+// Dauer als H:MM
+function fmtDur(min){
+  min = Math.round(min);
+  const h = Math.floor(min/60), m = min%60;
+  return h+":"+pad(m);
+}
+// Saldo als ±H:MM (echtes Minuszeichen)
+function fmtSigned(min){
+  min = Math.round(min);
+  const sign = min<0 ? "−" : "+";
+  const a = Math.abs(min);
+  return sign + Math.floor(a/60) + ":" + pad(a%60);
+}
+function diffClass(min){ return min>0?"pos":(min<0?"neg":"zero"); }
+
+// Montag der Woche
+function mondayOf(d){
+  const x=new Date(d); const dn=isoWeekIdx(x);
+  x.setDate(x.getDate()-dn); x.setHours(0,0,0,0); return x;
+}
+// ISO-Kalenderwoche
+function isoWeekNo(d){
+  const date=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dayNum=(date.getUTCDay()+6)%7;
+  date.setUTCDate(date.getUTCDate()-dayNum+3);
+  const firstThu=new Date(Date.UTC(date.getUTCFullYear(),0,4));
+  const fdn=(firstThu.getUTCDay()+6)%7;
+  firstThu.setUTCDate(firstThu.getUTCDate()-fdn+3);
+  return 1+Math.round((date-firstThu)/(7*86400000));
+}
+
+// Standard-Vorbelegung je Wochentag (Mo–Do voll, Fr kurz)
+function defaultEntryFor(d){
+  const k=sollKey(d);
+  if(k>=1 && k<=4) return {start:"07:30",bStart:"12:30",bEnd:"13:00",end:"15:30",note:""};
+  if(k===5)        return {start:"07:30",bStart:"",bEnd:"",end:"12:30",note:""};
+  return {start:"",bStart:"",bEnd:"",end:"",note:""};
+}
+
+// Summe Ist + Saldo über eine Liste von Datums-Keys (nur erfasste Tage)
+function aggregate(keys){
+  let ist=0, saldo=0, count=0;
+  for(const key of keys){
+    const e=state.entries[key];
+    if(!e) continue;
+    const d=parseYmd(key);
+    ist += netMin(e);
+    saldo += dayDiff(d,e);
+    count++;
+  }
+  return {ist,saldo,count};
+}
+function weekKeysFor(dateObj){
+  const mon=mondayOf(dateObj); const keys=[];
+  for(let i=0;i<7;i++){ const x=new Date(mon); x.setDate(mon.getDate()+i); keys.push(ymd(x)); }
+  return keys;
+}
+function monthKeys(year,month){
+  const last=new Date(year,month+1,0).getDate(); const keys=[];
+  for(let dd=1;dd<=last;dd++) keys.push(ymd(new Date(year,month,dd)));
+  return keys;
+}
+
+/* ============================================================
+   MODUL 3 — UI / Rendering
+============================================================ */
+let view = new Date(); view.setDate(1);
+let editKey = null;
+
+const $ = id => document.getElementById(id);
+
+function render(){
+  // Kopf
+  $("empLabel").textContent = state.settings.employer ? state.settings.employer : "Arbeitgeber einrichten";
+  $("monthName").textContent = MONTHS[view.getMonth()];
+  $("yearName").textContent = view.getFullYear();
+
+  // Wochen des Monats (ISO-Wochen, die mind. einen Tag im Monat haben)
+  const y=view.getFullYear(), m=view.getMonth();
+  const first=new Date(y,m,1), last=new Date(y,m+1,0);
+  const weeksWrap=$("weeks"); weeksWrap.innerHTML="";
+  const seen=new Set();
+  let cur=mondayOf(first);
+  const todayKey=ymd(new Date());
+
+  while(cur<=last){
+    const wkKeys=weekKeysFor(cur);
+    const id=wkKeys[0];
+    if(!seen.has(id)){
+      seen.add(id);
+      weeksWrap.appendChild(renderWeek(cur, wkKeys, m, todayKey));
+    }
+    cur=new Date(cur); cur.setDate(cur.getDate()+7);
+  }
+
+  // Bottom-Leiste: aktuelle (echte) Woche + Monatssaldo der Ansicht
+  const wAgg = aggregate(weekKeysFor(new Date()));
+  $("weekTotal").innerHTML = fmtDur(wAgg.ist)+'<small>Std</small>';
+
+  const mAgg = aggregate(monthKeys(y,m));
+  const ms=$("monthSaldo");
+  ms.textContent = fmtSigned(mAgg.saldo);
+  ms.className = "v "+ (mAgg.saldo>0?"pos":(mAgg.saldo<0?"neg":""));
+}
+
+function renderWeek(monday, keys, viewMonth, todayKey){
+  const agg=aggregate(keys);
+  const wk=document.createElement("section"); wk.className="week";
+
+  const sun=new Date(monday); sun.setDate(monday.getDate()+6);
+  const range = monday.getDate()+". "+MONTHS[monday.getMonth()].slice(0,3)+" – "+sun.getDate()+". "+MONTHS[sun.getMonth()].slice(0,3);
+
+  const head=document.createElement("div"); head.className="week-head";
+  head.innerHTML =
+    '<div class="kw">KW '+isoWeekNo(monday)+'<span class="range">'+range+'</span></div>'+
+    '<div class="grow"></div>'+
+    '<div class="week-sum"><div class="h tabnum">'+fmtDur(agg.ist)+' Std</div>'+
+      '<span class="badge '+diffClass(agg.saldo)+'">'+fmtSigned(agg.saldo)+'</span></div>';
+  wk.appendChild(head);
+
+  for(const key of keys){
+    const d=parseYmd(key);
+    wk.appendChild(renderDay(d,key,viewMonth,todayKey));
+  }
+  return wk;
+}
+
+function renderDay(d,key,viewMonth,todayKey){
+  const e=state.entries[key];
+  const out = d.getMonth()!==viewMonth;
+  const row=document.createElement("button");
+  row.className="day"+(out?" out":"")+(key===todayKey?" today":"");
+  row.onclick=()=>openDay(key);
+
+  let mid;
+  if(e && (e.start||e.end)){
+    const pause = (e.bStart&&e.bEnd) ? '  ('+'−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)' : '';
+    mid='<div class="times">'+ (e.start||"–") +' – '+ (e.end||"–") + pause +'</div>'+
+        (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
+  }else{
+    mid='<div class="empty">Noch nicht erfasst – tippen zum Eintragen</div>';
+  }
+
+  let right='';
+  if(e && (e.start||e.end)){
+    const diff=dayDiff(d,e);
+    right='<div class="net tabnum">'+fmtDur(netMin(e))+'</div>'+
+          '<div class="diff '+diffClass(diff)+'">'+fmtSigned(diff)+'</div>';
+  }
+
+  row.innerHTML=
+    '<div class="daydate"><div class="dow">'+DOW_SHORT[d.getDay()]+'</div>'+
+      '<div class="dom tabnum">'+pad(d.getDate())+'.'+pad(d.getMonth()+1)+'</div></div>'+
+    '<div class="daytimes">'+mid+'</div>'+
+    '<div class="dayright">'+right+'</div>';
+  return row;
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ============================================================
+   Tag-Editor
+============================================================ */
+function openDay(key){
+  editKey=key;
+  const d=parseYmd(key);
+  const e=state.entries[key] || defaultEntryFor(d);
+  $("dayTitle").textContent = DOW_LONG[d.getDay()];
+  $("dayMeta").textContent = pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+"  ·  Soll "+fmtDur(sollMin(d))+" Std";
+  $("fStart").value=e.start||""; $("fEnd").value=e.end||"";
+  $("fBStart").value=e.bStart||""; $("fBEnd").value=e.bEnd||"";
+  $("fNote").value=e.note||"";
+  $("delDay").style.display = state.entries[key] ? "block":"none";
+  updatePreview();
+  showSheet("daySheet");
+}
+function currentEntry(){
+  return {start:$("fStart").value,end:$("fEnd").value,bStart:$("fBStart").value,bEnd:$("fBEnd").value,note:$("fNote").value.trim()};
+}
+function updatePreview(){
+  const d=parseYmd(editKey), e=currentEntry();
+  const ist=netMin(e), soll=sollMin(d), diff=ist-soll;
+  $("pIst").textContent=fmtDur(ist);
+  $("pSoll").textContent=fmtDur(soll);
+  const pd=$("pDiff"); pd.textContent=fmtSigned(diff);
+  pd.className="v "+diffClass(diff);
+}
+["fStart","fEnd","fBStart","fBEnd"].forEach(id=>$(id).addEventListener("input",updatePreview));
+$("clearBreak").onclick=()=>{ $("fBStart").value=""; $("fBEnd").value=""; updatePreview(); };
+
+$("saveDay").onclick=()=>{
+  const e=currentEntry();
+  if(!e.start || !e.end){ toast("Bitte Beginn und Ende eintragen"); return; }
+  if(toMin(e.end) <= toMin(e.start)){ toast("Ende muss nach dem Beginn liegen"); return; }
+  if((e.bStart&&!e.bEnd)||(!e.bStart&&e.bEnd)){ toast("Pause braucht Anfang und Ende"); return; }
+  state.entries[editKey]=e; saveState(); hideSheets(); render(); toast("Gespeichert");
+};
+$("delDay").onclick=()=>{
+  if(state.entries[editKey]){ delete state.entries[editKey]; saveState(); hideSheets(); render(); toast("Gelöscht"); }
+};
+$("cancelDay").onclick=hideSheets;
+
+/* ============================================================
+   Einstellungen
+============================================================ */
+const SOLL_DAYS=[[1,"Montag"],[2,"Dienstag"],[3,"Mittwoch"],[4,"Donnerstag"],[5,"Freitag"],[6,"Samstag"],[7,"Sonntag"]];
+function openSettings(){
+  $("sEmp").value=state.settings.employer||"";
+  const g=$("sollGrid"); g.innerHTML="";
+  for(const [k,name] of SOLL_DAYS){
+    const min=state.settings.soll[k]??0;
+    const f=document.createElement("div"); f.className="field";
+    f.innerHTML='<label>'+name+'</label><input type="time" data-soll="'+k+'" value="'+fmtHHMM(min)+'">';
+    g.appendChild(f);
+  }
+  showSheet("setSheet");
+}
+function fmtHHMM(min){ return pad(Math.floor(min/60))+":"+pad(min%60); }
+$("saveSet").onclick=()=>{
+  state.settings.employer=$("sEmp").value.trim();
+  document.querySelectorAll("[data-soll]").forEach(inp=>{
+    const k=inp.getAttribute("data-soll"); const v=toMin(inp.value); state.settings.soll[k]= v==null?0:v;
+  });
+  saveState(); hideSheets(); render(); toast("Einstellungen gespeichert");
+};
+$("resetBtn").onclick=()=>{
+  if(confirm("Wirklich ALLE erfassten Zeiten und Einstellungen löschen?")){
+    state=defaultState(); saveState(); hideSheets(); render(); toast("Zurückgesetzt");
+  }
+};
+
+/* ---------- Backup ---------- */
+$("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="stundenbuch-sicherung-"+ymd(new Date())+".json";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast("Sicherung exportiert");
+};
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").onchange=(ev)=>{
+  const file=ev.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=migrate(JSON.parse(r.result));
+      if(!data.entries||typeof data.entries!=="object") throw 0;
+      state=data; saveState(); render(); hideSheets(); toast("Sicherung geladen");
+    }catch(e){ toast("Datei konnte nicht gelesen werden"); }
+  };
+  r.readAsText(file); ev.target.value="";
+};
+
+/* ============================================================
+   Sheets / Navigation / Toast
+============================================================ */
+function showSheet(id){ $("scrim").classList.add("show"); const s=$(id); s.classList.add("show"); s.setAttribute("aria-hidden","false"); }
+function hideSheets(){ $("scrim").classList.remove("show"); document.querySelectorAll(".sheet").forEach(s=>{s.classList.remove("show");s.setAttribute("aria-hidden","true");}); }
+$("scrim").onclick=hideSheets;
+$("settingsBtn").onclick=openSettings;
+$("prevM").onclick=()=>{ view.setMonth(view.getMonth()-1); render(); };
+$("nextM").onclick=()=>{ view.setMonth(view.getMonth()+1); render(); };
+$("todayBtn").onclick=()=>{ view=new Date(); view.setDate(1); render(); toast("Heute"); };
+
+let toastTimer=null;
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),1700);
+}
+
+render();
+
+/* ============================================================
+   PWA — Persistenter Speicher
+============================================================ */
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist();
+}
+
+/* ============================================================
+   PWA — Service Worker
+============================================================ */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js', { scope: './' });
+
+  // Genau einmal neu laden, wenn ein neuer SW die Kontrolle übernimmt
+  let swReloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swReloading) return;
+    swReloading = true;
+    location.reload();
+  });
+}
+</script>
+</body>
+</html>

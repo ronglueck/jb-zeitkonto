@@ -1,0 +1,7 @@
+# Betriebssystem
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code – lokale Sitzungs-/Projektdaten nicht veröffentlichen
+.claude/
