@@ -125,10 +125,14 @@ function Draw-MaskableIcon {
     Write-Host "Created: $outPath"
 }
 
-# Generate the three icons
+# Generate the icons
 Draw-AnyIcon -size 192 -outPath "$iconsDir\icon-192.png"
 Draw-AnyIcon -size 512 -outPath "$iconsDir\icon-512.png"
 Draw-MaskableIcon -size 512 -outPath "$iconsDir\icon-maskable-512.png"
+
+# Browser-Tab-Favicons (gleiches "JB"-Motiv, kleinere Groessen)
+Draw-AnyIcon -size 32 -outPath "$iconsDir\favicon-32.png"
+Draw-AnyIcon -size 48 -outPath "$iconsDir\favicon-48.png"
 
 Write-Host ""
 Write-Host "=== Verification ==="
@@ -137,7 +141,9 @@ Add-Type -AssemblyName System.Drawing
 $files = @(
     "$iconsDir\icon-192.png",
     "$iconsDir\icon-512.png",
-    "$iconsDir\icon-maskable-512.png"
+    "$iconsDir\icon-maskable-512.png",
+    "$iconsDir\favicon-32.png",
+    "$iconsDir\favicon-48.png"
 )
 
 foreach ($f in $files) {
