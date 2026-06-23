@@ -1238,5 +1238,187 @@ function pushHeartbeat() {
 initPushUI();
 pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) definiert
 </script>
+
+<!-- ============================================================
+     WAS IST NEU — einmaliges Update-Popup (Block 3)
+     Vollstaendig selbststaendig; kein Vorwaertsverweis ueber Block-Grenzen.
+     Eigener Key: zeitkonto_seen_version (stundenbuch_v1 unangetastet).
+============================================================ -->
+<script>
+"use strict";
+(function () {
+
+  /* ---- Versionsdaten ---- */
+  const APP_VERSION = 1;
+  const WHATS_NEW = [
+    { v: 1, items: [
+      "Urlaub, Krank & Feiertag pro Tag markierbar",
+      "Monatsbericht als PDF (Drucker-Symbol oben)",
+      "Urlaubsanspruch in den Einstellungen"
+    ]}
+    // Kuenftige Releases hier OBEN anhaengen: { v: 2, items: ["..."] }
+  ];
+  const SEEN_KEY = "zeitkonto_seen_version";
+
+  /* ---- Popup-Stile (einmalig eingefuegt) ---- */
+  function injectStyles() {
+    if (document.getElementById("wn-styles")) return;
+    const s = document.createElement("style");
+    s.id = "wn-styles";
+    s.textContent = [
+      "#wn-backdrop{",
+        "position:fixed;inset:0;background:rgba(10,18,24,.45);z-index:80;",
+        "display:flex;align-items:center;justify-content:center;",
+        "padding:20px;",
+      "}",
+      "#wn-card{",
+        "background:var(--card);color:var(--ink);",
+        "border-radius:18px;",
+        "box-shadow:0 4px 8px rgba(20,32,43,.10),0 16px 40px rgba(20,32,43,.14);",
+        "padding:22px 22px 18px;",
+        "width:100%;max-width:360px;",
+        "position:relative;",
+        "font-family:var(--sans);",
+      "}",
+      "#wn-close{",
+        "position:absolute;top:12px;right:14px;",
+        "appearance:none;border:0;background:none;",
+        "font-size:20px;line-height:1;color:var(--muted);cursor:pointer;",
+        "padding:4px 6px;border-radius:6px;",
+      "}",
+      "#wn-close:hover{background:var(--paper)}",
+      "#wn-card h3{",
+        "margin:0 28px 12px 0;",
+        "font-size:16px;font-weight:800;letter-spacing:.2px;",
+      "}",
+      "#wn-list{",
+        "margin:0 0 18px 0;padding:0;list-style:none;",
+      "}",
+      "#wn-list li{",
+        "display:flex;align-items:flex-start;gap:8px;",
+        "font-size:13.5px;line-height:1.45;",
+        "padding:5px 0;border-bottom:1px solid var(--line2);",
+        "color:var(--ink);",
+      "}",
+      "#wn-list li:last-child{border-bottom:0}",
+      "#wn-list li::before{",
+        "content:'✓';color:var(--brand);font-weight:800;font-size:13px;",
+        "flex:0 0 auto;margin-top:1px;",
+      "}",
+      "#wn-ok{",
+        "width:100%;appearance:none;border:0;",
+        "background:var(--brand);color:#fff;",
+        "border-radius:11px;padding:13px;",
+        "font-size:15px;font-weight:700;cursor:pointer;",
+        "font-family:var(--sans);",
+      "}",
+      "#wn-ok:active{transform:translateY(1px)}"
+    ].join("");
+    document.head.appendChild(s);
+  }
+
+  /* ---- Popup anzeigen ---- */
+  function showWhatsNew(items) {
+    injectStyles();
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "wn-backdrop";
+
+    const card = document.createElement("div");
+    card.id = "wn-card";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.id = "wn-close";
+    closeBtn.setAttribute("aria-label", "Schliessen");
+    closeBtn.textContent = "×";
+
+    const heading = document.createElement("h3");
+    heading.textContent = "Neu in Zeitkonto";
+
+    const ul = document.createElement("ul");
+    ul.id = "wn-list";
+    items.forEach(function (text) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      ul.appendChild(li);
+    });
+
+    const okBtn = document.createElement("button");
+    okBtn.id = "wn-ok";
+    okBtn.textContent = "Verstanden";
+
+    card.appendChild(closeBtn);
+    card.appendChild(heading);
+    card.appendChild(ul);
+    card.appendChild(okBtn);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    function dismiss() {
+      try { localStorage.setItem(SEEN_KEY, String(APP_VERSION)); } catch (e) {}
+      backdrop.remove();
+    }
+
+    closeBtn.addEventListener("click", dismiss);
+    okBtn.addEventListener("click", dismiss);
+    // Klick auf Hintergrund (nicht auf Karte) schliesst ebenfalls
+    backdrop.addEventListener("click", function (ev) {
+      if (ev.target === backdrop) dismiss();
+    });
+  }
+
+  /* ---- Anzeige-Logik ---- */
+  function maybeShowWhatsNew() {
+    var seenRaw = localStorage.getItem(SEEN_KEY);
+    var seen = parseInt(seenRaw, 10);
+
+    // isExistingUser: hat der Nutzer bereits Daten?
+    var isExistingUser = false;
+    try {
+      isExistingUser = (Object.keys(state.entries).length > 0) ||
+                       !!(state.settings && state.settings.employer);
+    } catch (e) {}
+
+    if (isNaN(seen)) {
+      // Erstmals auf diesem Geraet
+      if (!isExistingUser) {
+        // Frische Installation: still markieren, kein Popup
+        try { localStorage.setItem(SEEN_KEY, String(APP_VERSION)); } catch (e) {}
+        return;
+      }
+      // Bestandsnutzer bekommt das Feature: so behandeln, als haette er v0 gesehen
+      seen = 0;
+    }
+
+    if (seen >= APP_VERSION) return;
+
+    // Alle Eintraege mit v > seen zusammenfuehren
+    var items = [];
+    for (var i = 0; i < WHATS_NEW.length; i++) {
+      if (WHATS_NEW[i].v > seen) {
+        items = items.concat(WHATS_NEW[i].items);
+      }
+    }
+
+    if (items.length === 0) {
+      try { localStorage.setItem(SEEN_KEY, String(APP_VERSION)); } catch (e) {}
+      return;
+    }
+
+    // Popup nach erstem Render anzeigen (nicht-blockierend)
+    setTimeout(function () {
+      try { showWhatsNew(items); } catch (e) {}
+    }, 0);
+  }
+
+  /* ---- Aufruf (Funktion ist im selben Block definiert) ---- */
+  try {
+    maybeShowWhatsNew();
+  } catch (e) {
+    // Fehler duerfen die App nicht stoeren
+  }
+
+})();
+</script>
 </body>
 </html>
