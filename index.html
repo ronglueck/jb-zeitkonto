@@ -258,6 +258,63 @@
     box-shadow:var(--shadow);
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---------- Urlaubsanspruch-Zusammenfassung im Einstellungs-Sheet ---------- */
+  .urlaub-summary{
+    background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:10px 14px;margin:10px 0 4px;font-size:12.5px;color:var(--muted);
+    line-height:1.7;font-family:var(--mono);letter-spacing:.1px;
+  }
+  .urlaub-summary strong{color:var(--ink);font-weight:700}
+
+  /* ---------- Druckbericht: am Bildschirm ausgeblendet ---------- */
+  #report{display:none}
+
+  /* ---------- Print-CSS ---------- */
+  @media print{
+    /* Alles ausblenden, nur #report zeigen */
+    body > *:not(#report){ display:none !important; }
+    #report{
+      display:block !important;
+      font-family:Arial,Helvetica,sans-serif;
+      font-size:10pt;
+      color:#000;
+      background:#fff;
+      margin:0;padding:0;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact;
+    }
+    /* Seitenraender */
+    @page{ size:A4 portrait; margin:18mm 14mm 16mm 14mm; }
+    /* Berichts-Interne Stile */
+    #report .rpt-head{ margin-bottom:14pt; }
+    #report .rpt-head h2{ font-size:16pt;font-weight:700;margin:0 0 3pt; }
+    #report .rpt-head .rpt-sub{ font-size:11pt;color:#333;margin:0 0 2pt; }
+    #report .rpt-head .rpt-meta{ font-size:8.5pt;color:#666;margin:0; }
+    #report table{
+      width:100%;border-collapse:collapse;font-size:9pt;
+    }
+    #report th,#report td{
+      border:0.5pt solid #bbb;
+      padding:3pt 5pt;
+      text-align:left;
+      vertical-align:middle;
+      white-space:nowrap;
+    }
+    #report th{
+      background:#f0f0f0;font-weight:700;font-size:8pt;letter-spacing:.3px;
+    }
+    #report td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+    #report td.pos{ color:#0a6648; }
+    #report td.neg{ color:#9e2a18; }
+    #report td.zero{ color:#777; }
+    #report td.muted{ color:#777; }
+    #report tr.sum-row td{
+      font-weight:700;background:#f7f7f7;border-top:1pt solid #888;
+    }
+    #report .rpt-footer{
+      margin-top:10pt;font-size:8.5pt;color:#555;
+    }
+  }
 </style>
 </head>
 <body>
@@ -269,6 +326,7 @@
     <div class="emp" id="empLabel">Arbeitgeber einrichten</div>
   </div>
   <div class="grow"></div>
+  <button class="iconbtn" id="reportBtn" title="Monatsbericht als PDF" aria-label="Monatsbericht als PDF">🖨</button>
   <button class="iconbtn" id="todayBtn" title="Heute">⊚</button>
   <button class="iconbtn" id="settingsBtn" title="Einstellungen">⚙</button>
 </header>
@@ -354,6 +412,13 @@
   <div class="sollgrid" id="sollGrid"></div>
   <p class="hint">Das Soll legt fest, ab wann Mehr- oder Minusstunden entstehen. Voreingestellt: Mo–Do je 7:30 Std, Fr 5:00 Std (= 35:00 Std/Woche).</p>
 
+  <div class="divider"></div>
+  <div class="field">
+    <label>Urlaubsanspruch pro Jahr</label>
+    <input type="text" id="sUrlaub" inputmode="numeric" placeholder="30" style="font-family:var(--mono)">
+  </div>
+  <div class="urlaub-summary" id="urlaubSummary"></div>
+
   <!-- === Erinnerung (Push) — wird ausgeblendet wenn PUSH_CONFIG leer === -->
   <div class="divider" id="pushDivider"></div>
   <div id="pushSection">
@@ -394,6 +459,9 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Monatsbericht (nur im Druck sichtbar) -->
+<div id="report"></div>
+
 <script>
 "use strict";
 
@@ -408,7 +476,8 @@ function defaultState(){
     settings:{
       employer:"",
       // Soll in Minuten, 1=Mo … 7=So
-      soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0}
+      soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0},
+      urlaubsanspruch:30
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -537,6 +606,14 @@ function aggregate(keys){
     else if(e.type==="feiertag") feiertag++;
   }
   return {ist,saldo,count,urlaub,krank,feiertag};
+}
+// Anzahl Eintraege eines bestimmten Typs im Jahr
+function countTypeInYear(type, year){
+  let n=0;
+  for(const key of Object.keys(state.entries)){
+    if(key.startsWith(String(year)) && state.entries[key] && state.entries[key].type===type) n++;
+  }
+  return n;
 }
 function weekKeysFor(dateObj){
   const mon=mondayOf(dateObj); const keys=[];
@@ -771,8 +848,21 @@ $("cancelDay").onclick=hideSheets;
    Einstellungen
 ============================================================ */
 const SOLL_DAYS=[[1,"Montag"],[2,"Dienstag"],[3,"Mittwoch"],[4,"Donnerstag"],[5,"Freitag"],[6,"Samstag"],[7,"Sonntag"]];
+function renderUrlaubSummary(){
+  const year = view.getFullYear();
+  const anspruch = state.settings.urlaubsanspruch ?? 30;
+  const urlaubGenommen = countTypeInYear("urlaub", year);
+  const rest = Math.max(0, anspruch - urlaubGenommen);
+  const krank = countTypeInYear("krank", year);
+  const feiertag = countTypeInYear("feiertag", year);
+  $("urlaubSummary").innerHTML =
+    '<strong>Urlaub '+year+':</strong> '+urlaubGenommen+' genommen &middot; '+rest+' Rest' +
+    '<br><span style="font-size:11.5px">Krank: '+krank+' &middot; Feiertag: '+feiertag+'</span>';
+}
 function openSettings(){
   $("sEmp").value=state.settings.employer||"";
+  $("sUrlaub").value=state.settings.urlaubsanspruch ?? 30;
+  renderUrlaubSummary();
   const g=$("sollGrid"); g.innerHTML="";
   for(const [k,name] of SOLL_DAYS){
     const min=state.settings.soll[k]??0;
@@ -785,6 +875,8 @@ function openSettings(){
 function fmtHHMM(min){ return pad(Math.floor(min/60))+":"+pad(min%60); }
 $("saveSet").onclick=()=>{
   state.settings.employer=$("sEmp").value.trim();
+  const uVal=parseInt($("sUrlaub").value,10);
+  state.settings.urlaubsanspruch = (isNaN(uVal)||uVal<0) ? 30 : uVal;
   document.querySelectorAll("[data-soll]").forEach(inp=>{
     const k=inp.getAttribute("data-soll"); const v=toMin(inp.value); state.settings.soll[k]= v==null?0:v;
   });
@@ -826,9 +918,125 @@ function showSheet(id){ $("scrim").classList.add("show"); const s=$(id); s.class
 function hideSheets(){ $("scrim").classList.remove("show"); document.querySelectorAll(".sheet").forEach(s=>{s.classList.remove("show");s.setAttribute("aria-hidden","true");}); }
 $("scrim").onclick=hideSheets;
 $("settingsBtn").onclick=openSettings;
+// Live-Update der Urlaubszusammenfassung beim Eingeben
+$("sUrlaub").addEventListener("input",()=>{
+  const v=parseInt($("sUrlaub").value,10);
+  const saved=state.settings.urlaubsanspruch??30;
+  // temporaer fuer Vorschau verwenden
+  state.settings.urlaubsanspruch=(isNaN(v)||v<0)?30:v;
+  renderUrlaubSummary();
+  state.settings.urlaubsanspruch=saved; // noch nicht speichern
+});
 $("prevM").onclick=()=>{ view.setMonth(view.getMonth()-1); render(); };
 $("nextM").onclick=()=>{ view.setMonth(view.getMonth()+1); render(); };
 $("todayBtn").onclick=()=>{ view=new Date(); view.setDate(1); render(); toast("Heute"); };
+
+/* ============================================================
+   Monatsbericht / PDF-Druck
+============================================================ */
+function buildReport(){
+  const y=view.getFullYear(), m=view.getMonth();
+  const keys=monthKeys(y,m);
+  const agg=aggregate(keys);
+
+  const employer=state.settings.employer||"";
+  const heute=new Date();
+  const erstelldatum=pad(heute.getDate())+"."+pad(heute.getMonth()+1)+"."+heute.getFullYear();
+
+  // Kopfbereich
+  let html='<div class="rpt-head">'+
+    '<h2>Monatsbericht</h2>'+
+    '<p class="rpt-sub">'+MONTHS[m]+' '+y+(employer?' &mdash; '+escapeHtml(employer):'')+'</p>'+
+    '<p class="rpt-meta">Erstellt am '+erstelldatum+'</p>'+
+    '</div>';
+
+  // Tabelle
+  html+='<table>'+
+    '<thead><tr>'+
+    '<th>Datum</th>'+
+    '<th>Eintrag</th>'+
+    '<th class="num">Ist</th>'+
+    '<th class="num">Soll</th>'+
+    '<th class="num">Saldo</th>'+
+    '</tr></thead><tbody>';
+
+  for(const key of keys){
+    const d=parseYmd(key);
+    const e=state.entries[key];
+    const soll=sollMin(d);
+
+    let eintragCell, istStr, sollStr, saldoStr, rowSaldoCls='zero';
+
+    if(!e){
+      // Leerer Tag
+      eintragCell='<td class="muted">&mdash;</td>';
+      istStr='&mdash;';
+      sollStr=soll>0?fmtDur(soll):'&mdash;';
+      saldoStr='&mdash;';
+      rowSaldoCls='muted';
+    } else if(isWork(e)){
+      // Arbeitstag
+      let eintragText;
+      if(e.start||e.end){
+        eintragText=(e.start||'–')+' &ndash; '+(e.end||'–');
+        if(e.bStart&&e.bEnd){
+          eintragText+=' (&minus;'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)';
+        }
+      } else {
+        eintragText='&mdash;';
+      }
+      eintragCell='<td>'+eintragText+'</td>';
+      const ist=dayIst(d,e);
+      const diff=dayDiff(d,e);
+      istStr=fmtDur(ist);
+      sollStr=fmtDur(soll);
+      saldoStr=fmtSigned(diff);
+      rowSaldoCls=diffClass(diff);
+    } else {
+      // Urlaub / Krank / Feiertag
+      const label=e.type==="urlaub"?"Urlaub":(e.type==="krank"?"Krank":"Feiertag");
+      eintragCell='<td>'+label+'</td>';
+      istStr=fmtDur(soll);
+      sollStr=fmtDur(soll);
+      saldoStr='0:00';
+      rowSaldoCls='zero';
+    }
+
+    const datumStr=pad(d.getDate())+'.'+pad(d.getMonth()+1)+'. '+DOW_SHORT[d.getDay()];
+    html+='<tr>'+
+      '<td>'+datumStr+'</td>'+
+      eintragCell+
+      '<td class="num">'+istStr+'</td>'+
+      '<td class="num">'+sollStr+'</td>'+
+      '<td class="num '+rowSaldoCls+'">'+saldoStr+'</td>'+
+      '</tr>';
+  }
+
+  // Summenzeile — Saldo identisch mit aggregate(monthKeys).saldo
+  const saldoCls=diffClass(agg.saldo);
+  html+='<tr class="sum-row">'+
+    '<td colspan="2">Summe</td>'+
+    '<td class="num">'+fmtDur(agg.ist)+'</td>'+
+    '<td class="num">&mdash;</td>'+
+    '<td class="num '+saldoCls+'">'+fmtSigned(agg.saldo)+'</td>'+
+    '</tr>';
+
+  html+='</tbody></table>';
+
+  // Zaehler
+  const parts=[];
+  parts.push('Urlaub '+agg.urlaub);
+  parts.push('Krank '+agg.krank);
+  parts.push('Feiertag '+agg.feiertag);
+  html+='<div class="rpt-footer">'+parts.join(' &middot; ')+'</div>';
+
+  $("report").innerHTML=html;
+}
+
+$("reportBtn").onclick=()=>{
+  buildReport();
+  window.print();
+};
 
 let toastTimer=null;
 function toast(msg){
