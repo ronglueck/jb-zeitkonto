@@ -443,6 +443,25 @@
   <!-- === Ende Erinnerung === -->
 
   <div class="divider"></div>
+  <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Ansicht</label>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <span style="flex:1;font-size:14px">Wochenendtage anzeigen</span>
+    <label style="position:relative;display:inline-block;width:44px;height:26px;flex:0 0 auto">
+      <input type="checkbox" id="weekendToggle" style="opacity:0;width:0;height:0;position:absolute">
+      <span id="weekendTrack" style="
+        position:absolute;inset:0;border-radius:99px;cursor:pointer;
+        background:var(--line);transition:background .2s;
+      "></span>
+      <span id="weekendThumb" style="
+        position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+        background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);
+        transition:transform .2s;pointer-events:none;
+      "></span>
+    </label>
+  </div>
+  <p class="hint" style="margin-top:0">Wenn aus, zeigt die Liste nur Montag–Freitag (Samstag und Sonntag werden ausgeblendet).</p>
+
+  <div class="divider"></div>
   <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Daten sichern</label>
   <div class="seg">
     <button class="btn ghost" id="exportBtn">Sicherung exportieren</button>
@@ -477,7 +496,8 @@ function defaultState(){
       employer:"",
       // Soll in Minuten, 1=Mo … 7=So
       soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0},
-      urlaubsanspruch:30
+      urlaubsanspruch:30,
+      showWeekend:true
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -497,6 +517,8 @@ function migrate(s){
   const d = defaultState();
   s.settings = Object.assign(d.settings, s.settings||{});
   s.settings.soll = Object.assign(d.settings.soll, s.settings.soll||{});
+  // Additiv: showWeekend-Default sicherstellen (true wenn fehlt — alte Sicherungen zeigen Wochenenden)
+  if(typeof s.settings.showWeekend !== "boolean") s.settings.showWeekend = true;
   s.entries = s.entries || {};
   // Additiv: bestehende Eintraege ohne type bekommen type:"work"
   for(const key of Object.keys(s.entries)){
@@ -696,6 +718,9 @@ function renderWeek(monday, keys, viewMonth, todayKey){
 
   for(const key of keys){
     const d=parseYmd(key);
+    // Wochenendfilter: Sa (6) und So (0) komplett ausblenden wenn showWeekend===false (nur Mo-Fr)
+    const isWeekend = (d.getDay()===0 || d.getDay()===6);
+    if(isWeekend && state.settings.showWeekend===false) continue;
     wk.appendChild(renderDay(d,key,viewMonth,todayKey));
   }
   return wk;
@@ -870,9 +895,26 @@ function openSettings(){
     f.innerHTML='<label>'+name+'</label><input type="time" data-soll="'+k+'" value="'+fmtHHMM(min)+'">';
     g.appendChild(f);
   }
+  // Wochenend-Toggle initialisieren
+  const showWE = state.settings.showWeekend !== false;
+  const weToggle=$("weekendToggle"), weTrack=$("weekendTrack"), weThumb=$("weekendThumb");
+  if(weToggle){ weToggle.checked=showWE; }
+  if(weTrack){ weTrack.style.background = showWE ? "var(--brand)" : "var(--line)"; }
+  if(weThumb){ weThumb.style.transform  = showWE ? "translateX(18px)" : "translateX(0)"; }
   showSheet("setSheet");
 }
 function fmtHHMM(min){ return pad(Math.floor(min/60))+":"+pad(min%60); }
+
+// Wochenend-Toggle: visuelles Feedback sofort beim Klicken
+document.addEventListener("change", ev=>{
+  if(ev.target && ev.target.id==="weekendToggle"){
+    const on = ev.target.checked;
+    const tr=$("weekendTrack"), th=$("weekendThumb");
+    if(tr){ tr.style.background = on ? "var(--brand)" : "var(--line)"; }
+    if(th){ th.style.transform  = on ? "translateX(18px)" : "translateX(0)"; }
+  }
+});
+
 $("saveSet").onclick=()=>{
   state.settings.employer=$("sEmp").value.trim();
   const uVal=parseInt($("sUrlaub").value,10);
@@ -880,6 +922,9 @@ $("saveSet").onclick=()=>{
   document.querySelectorAll("[data-soll]").forEach(inp=>{
     const k=inp.getAttribute("data-soll"); const v=toMin(inp.value); state.settings.soll[k]= v==null?0:v;
   });
+  // Wochenend-Einstellung speichern
+  const weToggle=$("weekendToggle");
+  state.settings.showWeekend = weToggle ? weToggle.checked : true;
   saveState(); hideSheets(); render(); toast("Einstellungen gespeichert");
 };
 $("resetBtn").onclick=()=>{
@@ -1249,14 +1294,17 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 1;
+  const APP_VERSION = 2;
   const WHATS_NEW = [
+    { v: 2, items: [
+      "Wochenendtage in den Einstellungen ein-/ausblendbar"
+    ]},
     { v: 1, items: [
       "Urlaub, Krank & Feiertag pro Tag markierbar",
       "Monatsbericht als PDF (Drucker-Symbol oben)",
       "Urlaubsanspruch in den Einstellungen"
     ]}
-    // Kuenftige Releases hier OBEN anhaengen: { v: 2, items: ["..."] }
+    // Kuenftige Releases hier OBEN anhaengen: { v: 3, items: ["..."] }
   ];
   const SEEN_KEY = "zeitkonto_seen_version";
 
