@@ -217,6 +217,34 @@
   .btn.danger{background:var(--minus-soft);color:var(--minus);flex:0 0 auto;padding-left:18px;padding-right:18px}
 
   .seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
+  /* Tagestyp-Auswahl im Editor */
+  .typeseg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+  .typeseg button{
+    appearance:none;border:1px solid var(--line);background:var(--card);
+    border-radius:9px;padding:7px 4px;font-size:12px;font-weight:700;
+    color:var(--muted);cursor:pointer;transition:background .12s,color .12s,border-color .12s;
+    font-family:var(--sans);
+  }
+  .typeseg button.active-work{background:var(--brand-soft);color:var(--brand);border-color:var(--brand)}
+  .typeseg button.active-urlaub{background:var(--brand-soft);color:var(--brand);border-color:var(--brand)}
+  .typeseg button.active-krank{background:var(--minus-soft);color:var(--minus);border-color:var(--minus)}
+  .typeseg button.active-feiertag{background:#fdf6e3;color:#9a7a1a;border-color:var(--accent)}
+  /* Badge-Varianten fuer Tageszeilen */
+  .badge.urlaub{background:var(--brand-soft);color:var(--brand)}
+  .badge.krank{background:var(--minus-soft);color:var(--minus)}
+  .badge.feiertag{background:#fdf6e3;color:#9a7a1a}
+  .badge.urlaub,.badge.krank,.badge.feiertag{font-family:var(--sans)}
+  /* Nicht-Arbeit Hinweisbox im Editor */
+  .nonwork-hint{
+    background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--muted);
+    display:none;
+  }
+  /* Monats-Typzaehler */
+  .month-type-count{
+    font-size:11.5px;color:var(--muted);padding:0 2px 8px;
+    font-family:var(--mono);letter-spacing:.2px;
+  }
   .sollgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
   .sollgrid .field{margin-bottom:0}
   .hint{font-size:12px;color:var(--muted);line-height:1.5;margin:2px 0 16px}
@@ -274,16 +302,27 @@
   <h2 id="dayTitle">Tag</h2>
   <p class="sub" id="dayMeta"></p>
 
-  <div class="row2">
-    <div class="field"><label>Beginn</label><input type="time" id="fStart"></div>
-    <div class="field"><label>Ende</label><input type="time" id="fEnd"></div>
+  <div class="typeseg" id="typeSeg">
+    <button data-type="work"      class="active-work">Arbeit</button>
+    <button data-type="urlaub"    >Urlaub</button>
+    <button data-type="krank"     >Krank</button>
+    <button data-type="feiertag"  >Feiertag</button>
   </div>
 
-  <div class="pauserow">
-    <div class="field"><label>Pause von</label><input type="time" id="fBStart"></div>
-    <div class="field"><label>Pause bis</label><input type="time" id="fBEnd"></div>
+  <div id="nonworkHint" class="nonwork-hint"></div>
+
+  <div id="workFields">
+    <div class="row2">
+      <div class="field"><label>Beginn</label><input type="time" id="fStart"></div>
+      <div class="field"><label>Ende</label><input type="time" id="fEnd"></div>
+    </div>
+
+    <div class="pauserow">
+      <div class="field"><label>Pause von</label><input type="time" id="fBStart"></div>
+      <div class="field"><label>Pause bis</label><input type="time" id="fBEnd"></div>
+    </div>
+    <button class="linkbtn" id="clearBreak">Pause entfernen</button>
   </div>
-  <button class="linkbtn" id="clearBreak">Pause entfernen</button>
 
   <div class="field"><label>Notiz (optional)</label><input type="text" id="fNote" placeholder="z. B. Arzttermin, Homeoffice …"></div>
 
@@ -371,7 +410,7 @@ function defaultState(){
       // Soll in Minuten, 1=Mo … 7=So
       soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0}
     },
-    entries:{} // "YYYY-MM-DD": {start,bStart,bEnd,end,note}
+    entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
 }
 function loadState(){
@@ -390,6 +429,12 @@ function migrate(s){
   s.settings = Object.assign(d.settings, s.settings||{});
   s.settings.soll = Object.assign(d.settings.soll, s.settings.soll||{});
   s.entries = s.entries || {};
+  // Additiv: bestehende Eintraege ohne type bekommen type:"work"
+  for(const key of Object.keys(s.entries)){
+    if(s.entries[key] && !s.entries[key].type){
+      s.entries[key].type = "work";
+    }
+  }
   return s;
 }
 let state = loadState();
@@ -421,8 +466,21 @@ function netMin(e){
   if(bs!=null && be!=null) net -= (be - bs);
   return Math.max(0, net);
 }
+// Hilfsfunktion: ist ein Eintrag ein Arbeitstag?
+function isWork(e){ return !e || !e.type || e.type === "work"; }
+
 // Saldo eines Tages = Ist − Soll (nur wenn Tag erfasst ist)
-function dayDiff(dateObj, e){ return netMin(e) - sollMin(dateObj); }
+// Arbeit: Ist=netMin, Saldo=netMin-soll / Nicht-Arbeit: Ist=soll, Saldo=0
+function dayDiff(dateObj, e){
+  if(!e) return 0;
+  if(isWork(e)) return netMin(e) - sollMin(dateObj);
+  return 0;
+}
+function dayIst(dateObj, e){
+  if(!e) return 0;
+  if(isWork(e)) return netMin(e);
+  return sollMin(dateObj);
+}
 
 // Dauer als H:MM
 function fmtDur(min){
@@ -466,15 +524,19 @@ function defaultEntryFor(d){
 // Summe Ist + Saldo über eine Liste von Datums-Keys (nur erfasste Tage)
 function aggregate(keys){
   let ist=0, saldo=0, count=0;
+  let urlaub=0, krank=0, feiertag=0;
   for(const key of keys){
     const e=state.entries[key];
     if(!e) continue;
     const d=parseYmd(key);
-    ist += netMin(e);
+    ist += dayIst(d,e);
     saldo += dayDiff(d,e);
     count++;
+    if(e.type==="urlaub") urlaub++;
+    else if(e.type==="krank") krank++;
+    else if(e.type==="feiertag") feiertag++;
   }
-  return {ist,saldo,count};
+  return {ist,saldo,count,urlaub,krank,feiertag};
 }
 function weekKeysFor(dateObj){
   const mon=mondayOf(dateObj); const keys=[];
@@ -509,6 +571,18 @@ function render(){
   let cur=mondayOf(first);
   const todayKey=ymd(new Date());
 
+  // Monats-Typzaehler (vor den Wochen einfuegen)
+  const mAggFull = aggregate(monthKeys(y,m));
+  const typeParts=[];
+  if(mAggFull.urlaub>0) typeParts.push("Urlaub "+mAggFull.urlaub);
+  if(mAggFull.krank>0)  typeParts.push("Krank "+mAggFull.krank);
+  if(mAggFull.feiertag>0) typeParts.push("Feiertag "+mAggFull.feiertag);
+  if(typeParts.length>0){
+    const tc=document.createElement("div"); tc.className="month-type-count";
+    tc.textContent=typeParts.join(" · ");
+    weeksWrap.appendChild(tc);
+  }
+
   while(cur<=last){
     const wkKeys=weekKeysFor(cur);
     const id=wkKeys[0];
@@ -523,10 +597,9 @@ function render(){
   const wAgg = aggregate(weekKeysFor(new Date()));
   $("weekTotal").innerHTML = fmtDur(wAgg.ist)+'<small>Std</small>';
 
-  const mAgg = aggregate(monthKeys(y,m));
   const ms=$("monthSaldo");
-  ms.textContent = fmtSigned(mAgg.saldo);
-  ms.className = "v "+ (mAgg.saldo>0?"pos":(mAgg.saldo<0?"neg":""));
+  ms.textContent = fmtSigned(mAggFull.saldo);
+  ms.className = "v "+ (mAggFull.saldo>0?"pos":(mAggFull.saldo<0?"neg":""));
 }
 
 function renderWeek(monday, keys, viewMonth, todayKey){
@@ -558,20 +631,36 @@ function renderDay(d,key,viewMonth,todayKey){
   row.className="day"+(out?" out":"")+(key===todayKey?" today":"");
   row.onclick=()=>openDay(key);
 
-  let mid;
-  if(e && (e.start||e.end)){
-    const pause = (e.bStart&&e.bEnd) ? '  ('+'−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)' : '';
-    mid='<div class="times">'+ (e.start||"–") +' – '+ (e.end||"–") + pause +'</div>'+
-        (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
-  }else{
-    mid='<div class="empty">Noch nicht erfasst – tippen zum Eintragen</div>';
-  }
+  const work = !e || isWork(e);
 
-  let right='';
-  if(e && (e.start||e.end)){
-    const diff=dayDiff(d,e);
-    right='<div class="net tabnum">'+fmtDur(netMin(e))+'</div>'+
-          '<div class="diff '+diffClass(diff)+'">'+fmtSigned(diff)+'</div>';
+  let mid, right='';
+
+  if(!e){
+    // Kein Eintrag
+    mid='<div class="empty">Noch nicht erfasst – tippen zum Eintragen</div>';
+  } else if(work){
+    // Arbeitstag mit Eintrag
+    if(e.start||e.end){
+      const pause = (e.bStart&&e.bEnd) ? '  ('+'−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)' : '';
+      mid='<div class="times">'+ (e.start||"–") +' – '+ (e.end||"–") + pause +'</div>'+
+          (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
+      const diff=dayDiff(d,e);
+      right='<div class="net tabnum">'+fmtDur(netMin(e))+'</div>'+
+            '<div class="diff '+diffClass(diff)+'">'+fmtSigned(diff)+'</div>';
+    } else {
+      mid='<div class="empty">Noch nicht erfasst – tippen zum Eintragen</div>';
+    }
+  } else {
+    // Nicht-Arbeit-Typ
+    const typeLabel = e.type==="urlaub"?"Urlaub":(e.type==="krank"?"Krank":"Feiertag");
+    const badgeCls  = e.type; // "urlaub"|"krank"|"feiertag"
+    const gutMin    = sollMin(d);
+    mid='<div><span class="badge '+badgeCls+'">'+typeLabel+'</span>'+
+        (gutMin>0?' <span class="net tabnum" style="font-size:12px;color:var(--muted)">+'+fmtDur(gutMin)+'</span>':'')+
+        '</div>'+
+        (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
+    right='<div class="net tabnum">'+fmtDur(gutMin)+'</div>'+
+          '<div class="diff zero">+0:00</div>';
   }
 
   row.innerHTML=
@@ -587,6 +676,31 @@ function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 /* ============================================================
    Tag-Editor
 ============================================================ */
+// Tagestyp-Segment: aktiven Typ setzen und UI umschalten
+function setTypeSegment(type){
+  const btns = $("typeSeg").querySelectorAll("button");
+  btns.forEach(btn=>{
+    const t=btn.getAttribute("data-type");
+    btn.className = (t===type) ? "active-"+type : "";
+  });
+  const isW = (!type || type==="work");
+  $("workFields").style.display = isW ? "" : "none";
+  const hint=$("nonworkHint");
+  if(!isW){
+    const d=parseYmd(editKey);
+    hint.style.display="block";
+    hint.textContent="Zählt als Soll "+fmtDur(sollMin(d))+" Std · Saldo 0:00";
+  } else {
+    hint.style.display="none";
+  }
+  updatePreview();
+}
+// Aktiven Typ aus Segment lesen
+function activeType(){
+  const active=$("typeSeg").querySelector("button[class^='active-']");
+  return active ? active.getAttribute("data-type") : "work";
+}
+
 function openDay(key){
   editKey=key;
   const d=parseYmd(key);
@@ -597,15 +711,27 @@ function openDay(key){
   $("fBStart").value=e.bStart||""; $("fBEnd").value=e.bEnd||"";
   $("fNote").value=e.note||"";
   $("delDay").style.display = state.entries[key] ? "block":"none";
-  updatePreview();
+  setTypeSegment(e.type||"work");
   showSheet("daySheet");
 }
 function currentEntry(){
-  return {start:$("fStart").value,end:$("fEnd").value,bStart:$("fBStart").value,bEnd:$("fBEnd").value,note:$("fNote").value.trim()};
+  const type=activeType();
+  if(!isWork({type})){
+    return {type, note:$("fNote").value.trim()};
+  }
+  return {type:"work",start:$("fStart").value,end:$("fEnd").value,bStart:$("fBStart").value,bEnd:$("fBEnd").value,note:$("fNote").value.trim()};
 }
 function updatePreview(){
-  const d=parseYmd(editKey), e=currentEntry();
-  const ist=netMin(e), soll=sollMin(d), diff=ist-soll;
+  const d=parseYmd(editKey);
+  const type=activeType();
+  const soll=sollMin(d);
+  let ist, diff;
+  if(!isWork({type})){
+    ist=soll; diff=0;
+  } else {
+    const e=currentEntry();
+    ist=netMin(e); diff=ist-soll;
+  }
   $("pIst").textContent=fmtDur(ist);
   $("pSoll").textContent=fmtDur(soll);
   const pd=$("pDiff"); pd.textContent=fmtSigned(diff);
@@ -614,8 +740,22 @@ function updatePreview(){
 ["fStart","fEnd","fBStart","fBEnd"].forEach(id=>$(id).addEventListener("input",updatePreview));
 $("clearBreak").onclick=()=>{ $("fBStart").value=""; $("fBEnd").value=""; updatePreview(); };
 
+// Tagestyp-Segment: Klick-Handler
+$("typeSeg").addEventListener("click", ev=>{
+  const btn=ev.target.closest("button[data-type]");
+  if(!btn) return;
+  setTypeSegment(btn.getAttribute("data-type"));
+});
+
 $("saveDay").onclick=()=>{
   const e=currentEntry();
+  if(!isWork(e)){
+    // Kein Arbeitstag: keine Zeitvalidierung
+    state.entries[editKey]=e; saveState(); hideSheets(); render(); toast("Gespeichert");
+    pushHeartbeat(); // auch markierte Tage (Urlaub/Krank/Feiertag) gelten als erfasst
+    return;
+  }
+  // Arbeitstag: bisherige Validierung unveraendert
   if(!e.start || !e.end){ toast("Bitte Beginn und Ende eintragen"); return; }
   if(toMin(e.end) <= toMin(e.start)){ toast("Ende muss nach dem Beginn liegen"); return; }
   if((e.bStart&&!e.bEnd)||(!e.bStart&&e.bEnd)){ toast("Pause braucht Anfang und Ende"); return; }
@@ -875,7 +1015,8 @@ function pushHeartbeat() {
     // Pruefen: hat heute ein Eintrag mit start UND end?
     const todayKey = ymd(new Date());
     const e = state.entries[todayKey];
-    if (!e || !e.start || !e.end) return;
+    if (!e) return;
+    if (isWork(e) && (!e.start || !e.end)) return;
     // fire-and-forget
     fetch(PUSH_CONFIG.workerUrl + "/heartbeat", {
       method: "POST",
