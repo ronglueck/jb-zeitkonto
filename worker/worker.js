@@ -12,7 +12,7 @@
  *
  * KV-Binding: env.PUSH_KV
  *   Key: "s:" + sha256hex(endpoint)
- *   Val: JSON { subscription: {...}, lastLogged: "YYYY-MM-DD" | null }
+ *   Val: JSON { subscription: {...}, lastLogged: "YYYY-MM-DD" | null, workdays: number[] | null }
  *
  * Secrets (wrangler secret put):
  *   VAPID_PRIVATE_KEY  base64url, 32-Byte d
@@ -53,6 +53,17 @@ function b64urlDecode(str) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+/** Normalisiert eine Arbeitstage-Liste auf eindeutige Ints 1..7 (ISO Mo=1..So=7), sonst null. */
+function normWorkdays(input) {
+  if (!Array.isArray(input)) return null;
+  const out = [];
+  for (const v of input) {
+    const n = parseInt(v, 10);
+    if (n >= 1 && n <= 7 && !out.includes(n)) out.push(n);
+  }
+  return out.length ? out : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,7 +226,7 @@ async function handleFetch(request, env) {
     }
 
     const key = "s:" + (await sha256hex(subscription.endpoint));
-    const record = { subscription, lastLogged: null };
+    const record = { subscription, lastLogged: null, workdays: normWorkdays(body?.workdays) };
     await env.PUSH_KV.put(key, JSON.stringify(record));
 
     return jsonResponse({ ok: true }, 200, env);
@@ -231,17 +242,24 @@ async function handleFetch(request, env) {
     }
 
     const endpoint = body?.endpoint;
-    const date = body?.date;
-    if (!endpoint || !date) {
-      return jsonResponse({ ok: false, error: "endpoint und date erforderlich" }, 400, env);
+    if (!endpoint) {
+      return jsonResponse({ ok: false, error: "endpoint erforderlich" }, 400, env);
     }
+    const date = body?.date;
+    const logged = body?.logged;
 
     const key = "s:" + (await sha256hex(endpoint));
     const raw = await env.PUSH_KV.get(key);
     if (raw) {
       // Nur aktualisieren, wenn das Abo bekannt ist
       const record = JSON.parse(raw);
-      record.lastLogged = date;
+      // Arbeitstage aktualisieren, falls mitgeschickt
+      if (Array.isArray(body?.workdays)) record.workdays = normWorkdays(body.workdays);
+      // lastLogged nur setzen, wenn heute erfasst (logged===true).
+      // Alte Clients ohne logged-Flag: vorhandenes date impliziert "erfasst".
+      if (date && (logged === true || logged === undefined)) {
+        record.lastLogged = date;
+      }
       await env.PUSH_KV.put(key, JSON.stringify(record));
     }
     // Unbekanntes Abo: ignorieren, trotzdem 200
@@ -300,7 +318,10 @@ async function handleScheduled(event, env) {
     timeZone: "Europe/Berlin",
   }).format(new Date()); // "YYYY-MM-DD"
 
-  console.log(`Cron: Berlin 20 Uhr, Datum ${todayBerlin} — starte Push-Versand.`);
+  // ISO-Wochentag (1=Mo .. 7=So) fuer das Berlin-Datum (Mittag-UTC vermeidet TZ-Raender)
+  const isoWeekday = ((new Date(todayBerlin + "T12:00:00Z").getUTCDay() + 6) % 7) + 1;
+
+  console.log(`Cron: Berlin 20 Uhr, Datum ${todayBerlin} (ISO-Wochentag ${isoWeekday}) — starte Push-Versand.`);
 
   // Alle "s:"-Keys laden
   let cursor;
@@ -324,6 +345,14 @@ async function handleScheduled(event, env) {
       }
 
       const { subscription, lastLogged } = record;
+
+      // Nur an Arbeitstagen erinnern (Default Mo-Fr, falls noch keine Arbeitstage gemeldet)
+      const workdays = (Array.isArray(record.workdays) && record.workdays.length)
+        ? record.workdays
+        : [1, 2, 3, 4, 5];
+      if (!workdays.includes(isoWeekday)) {
+        continue; // heute kein Arbeitstag (z.B. Sa/So) -> keine Erinnerung
+      }
 
       // Wenn heute bereits geloggt: kein Push noetig
       if (lastLogged === todayBerlin) {

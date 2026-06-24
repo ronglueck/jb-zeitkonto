@@ -1219,7 +1219,7 @@ async function pushSubscribe() {
     fetch(PUSH_CONFIG.workerUrl + "/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub.toJSON() })
+      body: JSON.stringify({ subscription: sub.toJSON(), workdays: currentWorkdays() })
     }).catch(() => {});
     const ps = { enabled: true, endpoint: sub.endpoint };
     savePushState(ps);
@@ -1260,21 +1260,25 @@ async function pushUnsubscribe() {
 
 /* ---- Heartbeat ---- */
 
+// Arbeitstage (ISO 1=Mo .. 7=So) = Wochentage mit Soll > 0
+function currentWorkdays() {
+  return [1,2,3,4,5,6,7].filter(k => (Number(state.settings.soll[k]) || 0) > 0);
+}
+
 function pushHeartbeat() {
   if (!pushConfigActive()) return;
   try {
     const ps = loadPushState();
     if (!ps.enabled || !ps.endpoint) return;
-    // Pruefen: hat heute ein Eintrag mit start UND end?
     const todayKey = ymd(new Date());
     const e = state.entries[todayKey];
-    if (!e) return;
-    if (isWork(e) && (!e.start || !e.end)) return;
-    // fire-and-forget
+    // "logged" = heute liegt ein Eintrag vor (Arbeit mit Zeiten ODER Urlaub/Krank/Feiertag)
+    const logged = !!(e && (!isWork(e) || (e.start && e.end)));
+    // Immer senden (wenn aktiviert): meldet Arbeitstage + heutigen Status an den Worker
     fetch(PUSH_CONFIG.workerUrl + "/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: ps.endpoint, date: todayKey })
+      body: JSON.stringify({ endpoint: ps.endpoint, date: todayKey, logged: logged, workdays: currentWorkdays() })
     }).catch(() => {});
   } catch (e) {}
 }
