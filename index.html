@@ -1124,8 +1124,8 @@ if ('serviceWorker' in navigator) {
 
 /* ---- Konfiguration (vom Nutzer ausfuellen) ---- */
 const PUSH_CONFIG = {
-  workerUrl: "",          // z. B. "https://zeitkonto-push.sub.workers.dev"
-  vapidPublicKey: ""      // base64url-VAPID-Public-Key (vom Worker)
+  workerUrl: "https://zeitkonto-push.h1n15r15.workers.dev",
+  vapidPublicKey: "BFxdM23Qunb2I6EhOSKeGOtSWWB12eI-6yO6qgggeBR4jZL8285QfL8ijziz5pM1duBnafw9sUfosjsrTFlJnI0"
 };
 
 /* ---- Hilfsfunktionen ---- */
@@ -1294,8 +1294,11 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 2;
+  const APP_VERSION = 3;
   const WHATS_NEW = [
+    { v: 3, items: [
+      "Tägliche Erinnerung um 20 Uhr (in den Einstellungen aktivierbar)"
+    ]},
     { v: 2, items: [
       "Wochenendtage in den Einstellungen ein-/ausblendbar"
     ]},
