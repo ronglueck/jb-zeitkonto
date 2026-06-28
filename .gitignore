@@ -9,3 +9,8 @@ desktop.ini
 # Cloudflare Worker – lokale Build-/Tool-Dateien
 worker/node_modules/
 .wrangler/
+
+# Interne/Verkaufs-Dokumente – nicht öffentlich veröffentlichen
+VERFAHRENSDOKUMENTATION.md
+Zeitkonto-Praesentation.pdf
+tools/make-presentation.py
