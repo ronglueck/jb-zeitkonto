@@ -161,6 +161,14 @@
   .cell .v small{font-size:12px;font-weight:600;color:#8ea0ad;margin-left:4px;font-family:var(--sans)}
   .cell .v.pos{color:#5fd0b3}
   .cell .v.neg{color:#f4a79b}
+  /* Drei Zellen (Gesamt sichtbar): kompakter, damit es auf schmalen Displays passt */
+  .bottom.has-total .cell{padding:6px 8px}
+  .bottom.has-total .cell .k{font-size:10px;letter-spacing:1px;white-space:nowrap}
+  .bottom.has-total .cell .v{font-size:clamp(13px,4.5vw,17px);white-space:nowrap}
+  .bottom.has-total .cell .v small{font-size:10px}
+  @media (max-width:359px){
+    .bottom.has-total .cell .k{font-size:9.5px;letter-spacing:.4px}
+  }
 
   /* ---------- Sheet ---------- */
   .scrim{
@@ -351,6 +359,10 @@
     <div class="k">Monat Saldo</div>
     <div class="v" id="monthSaldo">0:00</div>
   </div>
+  <div class="cell" id="totalCell">
+    <div class="k">Gesamt</div>
+    <div class="v" id="totalSaldo">0:00</div>
+  </div>
 </nav>
 
 <!-- Tag-Editor -->
@@ -460,6 +472,22 @@
     </label>
   </div>
   <p class="hint" style="margin-top:0">Wenn aus, zeigt die Liste nur Montag–Freitag (Samstag und Sonntag werden ausgeblendet).</p>
+  <div style="display:flex;align-items:center;gap:12px;margin:12px 0 8px">
+    <label for="totalToggle" style="flex:1;font-size:14px;cursor:pointer">Gesamt-Überstunden anzeigen</label>
+    <label style="position:relative;display:inline-block;width:44px;height:26px;flex:0 0 auto">
+      <input type="checkbox" id="totalToggle" style="opacity:0;width:0;height:0;position:absolute">
+      <span id="totalTrack" style="
+        position:absolute;inset:0;border-radius:99px;cursor:pointer;
+        background:var(--line);transition:background .2s;
+      "></span>
+      <span id="totalThumb" style="
+        position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+        background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);
+        transition:transform .2s;pointer-events:none;
+      "></span>
+    </label>
+  </div>
+  <p class="hint" style="margin-top:0">Wenn aus, zeigt die Fußzeile nur Woche und Monatssaldo.</p>
 
   <div class="divider"></div>
   <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Daten sichern</label>
@@ -497,7 +525,8 @@ function defaultState(){
       // Soll in Minuten, 1=Mo … 7=So
       soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0},
       urlaubsanspruch:30,
-      showWeekend:true
+      showWeekend:true,
+      showTotalSaldo:true
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -519,6 +548,8 @@ function migrate(s){
   s.settings.soll = Object.assign(d.settings.soll, s.settings.soll||{});
   // Additiv: showWeekend-Default sicherstellen (true wenn fehlt — alte Sicherungen zeigen Wochenenden)
   if(typeof s.settings.showWeekend !== "boolean") s.settings.showWeekend = true;
+  // Additiv: showTotalSaldo-Default sicherstellen (true wenn fehlt — Gesamt-Zelle sichtbar)
+  if(typeof s.settings.showTotalSaldo !== "boolean") s.settings.showTotalSaldo = true;
   s.entries = s.entries || {};
   // Additiv: bestehende Eintraege ohne type bekommen type:"work"
   for(const key of Object.keys(s.entries)){
@@ -698,7 +729,18 @@ function render(){
 
   const ms=$("monthSaldo");
   ms.textContent = fmtSigned(mAggFull.saldo);
-  ms.className = "v "+ (mAggFull.saldo>0?"pos":(mAggFull.saldo<0?"neg":""));
+  ms.className = "v "+diffClass(mAggFull.saldo);
+
+  // Gesamt-Überstunden (Saldo über alle erfassten Tage)
+  const showTot = state.settings.showTotalSaldo !== false;
+  $("totalCell").style.display = showTot ? "" : "none";
+  document.querySelector("nav.bottom").classList.toggle("has-total", showTot);
+  if(showTot){
+    const tAgg = aggregate(Object.keys(state.entries));
+    const ts=$("totalSaldo");
+    ts.textContent = fmtSigned(tAgg.saldo);
+    ts.className = "v "+diffClass(tAgg.saldo);
+  }
 }
 
 function renderWeek(monday, keys, viewMonth, todayKey){
@@ -901,15 +943,26 @@ function openSettings(){
   if(weToggle){ weToggle.checked=showWE; }
   if(weTrack){ weTrack.style.background = showWE ? "var(--brand)" : "var(--line)"; }
   if(weThumb){ weThumb.style.transform  = showWE ? "translateX(18px)" : "translateX(0)"; }
+  // Gesamt-Toggle initialisieren
+  const showTot = state.settings.showTotalSaldo !== false;
+  const totToggle=$("totalToggle"), totTrack=$("totalTrack"), totThumb=$("totalThumb");
+  if(totToggle){ totToggle.checked=showTot; }
+  if(totTrack){ totTrack.style.background = showTot ? "var(--brand)" : "var(--line)"; }
+  if(totThumb){ totThumb.style.transform  = showTot ? "translateX(18px)" : "translateX(0)"; }
   showSheet("setSheet");
 }
 function fmtHHMM(min){ return pad(Math.floor(min/60))+":"+pad(min%60); }
 
-// Wochenend-Toggle: visuelles Feedback sofort beim Klicken
+// Ansicht-Toggles: visuelles Feedback sofort beim Klicken
+const VIEW_TOGGLES = {
+  weekendToggle:{track:"weekendTrack", thumb:"weekendThumb"},
+  totalToggle:{track:"totalTrack", thumb:"totalThumb"}
+};
 document.addEventListener("change", ev=>{
-  if(ev.target && ev.target.id==="weekendToggle"){
+  const t = ev.target && VIEW_TOGGLES[ev.target.id];
+  if(t){
     const on = ev.target.checked;
-    const tr=$("weekendTrack"), th=$("weekendThumb");
+    const tr=$(t.track), th=$(t.thumb);
     if(tr){ tr.style.background = on ? "var(--brand)" : "var(--line)"; }
     if(th){ th.style.transform  = on ? "translateX(18px)" : "translateX(0)"; }
   }
@@ -925,6 +978,9 @@ $("saveSet").onclick=()=>{
   // Wochenend-Einstellung speichern
   const weToggle=$("weekendToggle");
   state.settings.showWeekend = weToggle ? weToggle.checked : true;
+  // Gesamt-Überstunden-Einstellung speichern
+  const totToggle=$("totalToggle");
+  state.settings.showTotalSaldo = totToggle ? totToggle.checked : true;
   saveState(); hideSheets(); render(); toast("Einstellungen gespeichert");
 };
 $("resetBtn").onclick=()=>{
@@ -1298,8 +1354,11 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 3;
+  const APP_VERSION = 4;
   const WHATS_NEW = [
+    { v: 4, items: [
+      "Gesamt-Überstunden in der Fußzeile (in den Einstellungen abschaltbar)"
+    ]},
     { v: 3, items: [
       "Tägliche Erinnerung um 20 Uhr (in den Einstellungen aktivierbar)"
     ]},
