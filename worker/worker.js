@@ -18,7 +18,8 @@
  *     subscription: {...},
  *     lastLogged:  "YYYY-MM-DD" | null,     // Tag vollstaendig erfasst
  *     workdays:    number[] | null,          // ISO 1=Mo .. 7=So
- *     times:       { start, pause, end, day } | null,  // "HH:MM", leer = aus
+ *     times:       { start, pause, end, endFri, day } | null,  // "HH:MM", leer = aus
+ *                  // endFri: eigener Feierabend fuer Freitag; leer = "end" gilt auch dann
  *     status:      { date, hasStart, hasBreak, hasEnd } | null,
  *     sent:        { date, kinds: string[], lastKind, testAt } | null
  *   }
@@ -39,8 +40,17 @@
 /** Erinnerungsanlaesse in der Reihenfolge, in der sie am Tag auftreten. */
 const KINDS = ["start", "pause", "end", "day"];
 
+/**
+ * Alle gespeicherten Uhrzeit-Felder. "endFri" ist kein eigener Anlass, sondern
+ * eine Sonderzeit fuer den Feierabend am Freitag (leer = Mo-Do-Zeit gilt auch dann).
+ */
+const TIME_KEYS = ["start", "pause", "end", "endFri", "day"];
+
+/** ISO-Wochentag, fuer den "endFri" gilt. */
+const FRIDAY = 5;
+
 /** Voreinstellung, falls ein Abo noch keine Zeiten gemeldet hat. */
-const DEFAULT_TIMES = { start: "07:45", pause: "12:35", end: "15:45", day: "20:00" };
+const DEFAULT_TIMES = { start: "07:45", pause: "12:35", end: "15:45", endFri: "", day: "20:00" };
 
 /**
  * Zeitfenster nach der eingestellten Uhrzeit, in dem noch erinnert wird.
@@ -115,16 +125,16 @@ function normTimes(input) {
   if (!input || typeof input !== "object") return null;
   const out = {};
   let any = false;
-  for (const kind of KINDS) {
-    const min = hhmmToMin(input[kind]);
+  for (const key of TIME_KEYS) {
+    const min = hhmmToMin(input[key]);
     if (min == null) {
-      out[kind] = "";
+      out[key] = "";
     } else {
-      out[kind] = input[kind].trim();
+      out[key] = input[key].trim();
       any = true;
     }
   }
-  return any ? out : { start: "", pause: "", end: "", day: "" };
+  return any ? out : { start: "", pause: "", end: "", endFri: "", day: "" };
 }
 
 /** Tagesstatus aus dem Request normalisieren. */
@@ -155,6 +165,17 @@ function berlinNow() {
 }
 
 /**
+ * Uhrzeit fuer einen Anlass. Freitags gilt fuer den Feierabend "endFri",
+ * sofern dort etwas Gueltiges steht.
+ */
+function timeForKind(kind, times, isoWeekday) {
+  if (kind === "end" && isoWeekday === FRIDAY && hhmmToMin(times.endFri) != null) {
+    return times.endFri;
+  }
+  return times[kind];
+}
+
+/**
  * Entscheidet, welche Erinnerung fuer ein Abo gerade faellig ist.
  * Gibt den Anlass ("start" | "pause" | "end" | "day") zurueck oder null.
  */
@@ -175,7 +196,7 @@ function dueKind(record, now) {
   // Spaetesten faelligen Anlass gewinnen lassen (KINDS ist chronologisch)
   let due = null;
   for (const kind of KINDS) {
-    const t = hhmmToMin(times[kind]);
+    const t = hhmmToMin(timeForKind(kind, times, now.isoWeekday));
     if (t == null) continue;                       // abgeschaltet
     if (now.min < t || now.min >= t + WINDOW_MIN) continue;  // nicht im Fenster
     if (sentKinds.includes(kind)) continue;        // heute schon erinnert
@@ -591,4 +612,4 @@ export default {
 };
 
 // Fuer Tests exportiert (im Worker-Betrieb ungenutzt)
-export { dueKind, normTimes, hhmmToMin, berlinNow, DEFAULT_TIMES, WINDOW_MIN };
+export { dueKind, normTimes, hhmmToMin, berlinNow, timeForKind, DEFAULT_TIMES, WINDOW_MIN };

@@ -514,10 +514,11 @@
     <div class="sollgrid">
       <div class="field"><label>Arbeitsbeginn</label><input type="time" id="rStart"></div>
       <div class="field"><label>Pause</label><input type="time" id="rPause"></div>
-      <div class="field"><label>Feierabend</label><input type="time" id="rEnd"></div>
+      <div class="field"><label>Feierabend Mo–Do</label><input type="time" id="rEnd"></div>
+      <div class="field"><label>Feierabend Fr</label><input type="time" id="rEndFri"></div>
       <div class="field"><label>Tagescheck</label><input type="time" id="rDay"></div>
     </div>
-    <p class="hint">Ein leeres Feld schaltet die jeweilige Erinnerung ab. Der Tagescheck meldet sich nur, wenn für den Tag noch gar nichts erfasst ist.</p>
+    <p class="hint">Ein leeres Feld schaltet die jeweilige Erinnerung ab — nur <em>Feierabend&nbsp;Fr</em> nicht: bleibt es leer, gilt freitags die Mo–Do-Zeit. Der Tagescheck meldet sich nur, wenn für den Tag noch gar nichts erfasst ist.</p>
     <button class="btn ghost" id="testPushBtn" style="width:100%">Test-Benachrichtigung senden</button>
   </div>
   <!-- === Ende Erinnerung === -->
@@ -596,7 +597,8 @@ function defaultState(){
       showWeekend:true,
       showTotalSaldo:true,
       // Erinnerungszeiten; leerer Wert = dieser Anlass ist abgeschaltet
-      reminders:{start:"07:45",pause:"12:35",end:"15:45",day:"20:00"}
+      // endFri leer = die Feierabend-Zeit gilt auch freitags
+      reminders:{start:"07:45",pause:"12:35",end:"15:45",endFri:"",day:"20:00"}
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -621,7 +623,7 @@ function migrate(s){
   // Additiv: showTotalSaldo-Default sicherstellen (true wenn fehlt — Gesamt-Zelle sichtbar)
   if(typeof s.settings.showTotalSaldo !== "boolean") s.settings.showTotalSaldo = true;
   // Additiv: Erinnerungszeiten (fehlende Anlaesse bekommen die Voreinstellung)
-  s.settings.reminders = Object.assign({start:"07:45",pause:"12:35",end:"15:45",day:"20:00"},
+  s.settings.reminders = Object.assign({start:"07:45",pause:"12:35",end:"15:45",endFri:"",day:"20:00"},
                                         s.settings.reminders || {});
   s.entries = s.entries || {};
   // Additiv: bestehende Eintraege ohne type bekommen type:"work"
@@ -708,8 +710,25 @@ function isoWeekNo(d){
   return 1+Math.round((date-firstThu)/(7*86400000));
 }
 
-// Standard-Vorbelegung je Wochentag (Mo–Do voll, Fr kurz)
+// Juengster vollstaendig erfasster Arbeitstag vor `d`.
+// sameDowOnly: nur denselben Wochentag beruecksichtigen (Freitag sieht anders
+// aus als Montag), sonst irgendeinen. Blickt hoechstens 60 Tage zurueck.
+function lastWorkedDay(d, sameDowOnly){
+  const wd=d.getDay();
+  for(let i=1;i<=60;i++){
+    const x=new Date(d); x.setDate(d.getDate()-i);
+    if(sameDowOnly && x.getDay()!==wd) continue;
+    const e=state.entries[ymd(x)];
+    if(e && isWork(e) && e.start && e.end) return e;
+  }
+  return null;
+}
+
+// Vorbelegung fuer einen noch leeren Tag: bevorzugt der letzte gleiche
+// Wochentag, sonst der letzte erfasste Tag, sonst der eingebaute Standard.
 function defaultEntryFor(d){
+  const prev = lastWorkedDay(d, true) || (sollMin(d)>0 ? lastWorkedDay(d, false) : null);
+  if(prev) return {start:prev.start, bStart:prev.bStart||"", bEnd:prev.bEnd||"", end:prev.end, note:""};
   const k=sollKey(d);
   if(k>=1 && k<=4) return {start:"07:30",bStart:"12:30",bEnd:"13:00",end:"15:30",note:""};
   if(k===5)        return {start:"07:30",bStart:"",bEnd:"",end:"12:30",note:""};
@@ -1218,7 +1237,7 @@ function openSettings(){
   }
   // Erinnerungszeiten in die Felder schreiben
   const rem = state.settings.reminders || {};
-  const REM_FIELDS = {rStart:"start", rPause:"pause", rEnd:"end", rDay:"day"};
+  const REM_FIELDS = {rStart:"start", rPause:"pause", rEnd:"end", rEndFri:"endFri", rDay:"day"};
   for(const id in REM_FIELDS){ const el=$(id); if(el) el.value = rem[REM_FIELDS[id]] || ""; }
   // Wochenend-Toggle initialisieren
   const showWE = state.settings.showWeekend !== false;
@@ -1269,6 +1288,7 @@ $("saveSet").onclick=()=>{
     start: $("rStart") ? $("rStart").value : "",
     pause: $("rPause") ? $("rPause").value : "",
     end:   $("rEnd")   ? $("rEnd").value   : "",
+    endFri:$("rEndFri")? $("rEndFri").value: "",
     day:   $("rDay")   ? $("rDay").value   : ""
   };
   saveState(); hideSheets(); render(); toast("Einstellungen gespeichert");
@@ -1632,7 +1652,8 @@ function currentWorkdays() {
 // Eingestellte Erinnerungszeiten
 function currentTimes() {
   const r = state.settings.reminders || {};
-  return { start: r.start || "", pause: r.pause || "", end: r.end || "", day: r.day || "" };
+  return { start: r.start || "", pause: r.pause || "", end: r.end || "",
+           endFri: r.endFri || "", day: r.day || "" };
 }
 
 // Welche Schritte des heutigen Tages sind erledigt?
@@ -1723,7 +1744,8 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
       "Stempeln mit einem Tipp: Kommen, Pause, Feierabend — oben auf der Startseite",
       "Erinnerung zum Arbeitsbeginn, zur Pause und zum Feierabend (Zeiten in den Einstellungen)",
       "Hinweis, wenn an einem früheren Tag das Ende fehlt",
-      "App-Symbol gedrückt halten: Kommen oder Feierabend direkt stempeln"
+      "App-Symbol gedrückt halten: Kommen oder Feierabend direkt stempeln",
+      "Eigene Feierabend-Erinnerung für Freitag (Einstellungen)"
     ]},
     { v: 4, items: [
       "Gesamt-Überstunden in der Fußzeile (in den Einstellungen abschaltbar)"

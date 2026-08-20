@@ -183,10 +183,15 @@ GitHub Pages deployt automatisch. Nach ca. einer Minute ist die Aenderung live.
    |---|---|---|
    | Arbeitsbeginn | 07:45 | bis dahin kein Beginn gestempelt wurde |
    | Pause | 12:35 | gestempelt wurde, aber noch keine Pause erfasst ist |
-   | Feierabend | 15:45 | der Dienst laeuft, aber kein Ende erfasst ist |
+   | Feierabend Mo–Do | 15:45 | der Dienst laeuft, aber kein Ende erfasst ist |
+   | Feierabend Fr | *(leer)* | dasselbe, aber nur freitags — **leer heisst: die Mo–Do-Zeit gilt auch freitags** |
    | Tagescheck | 20:00 | fuer den Tag noch gar nichts erfasst ist |
 
-   Ein **leeres Feld schaltet die jeweilige Erinnerung ab**. Erinnert wird nur
+   Der kurze Freitag braucht meist eine eigene Zeit: wer Mo–Do vorarbeitet und
+   freitags frueher geht, wuerde sonst erst lange nach dem Heimweg erinnert.
+
+   Ein **leeres Feld schaltet die jeweilige Erinnerung ab** (Ausnahme
+   *Feierabend Fr*, siehe oben). Erinnert wird nur
    an Arbeitstagen (Wochentage mit Soll > 0) und nur, wenn der Schritt wirklich
    noch fehlt — wer morgens stempelt, bekommt mittags keine Beginn-Erinnerung.
 7. **Sofort pruefen:** Knopf **Test-Benachrichtigung senden** tippen. Innerhalb
