@@ -275,6 +275,64 @@
   }
   .urlaub-summary strong{color:var(--ink);font-weight:700}
 
+  /* ---------- Stempelkarte "Heute" ---------- */
+  .stamp{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);padding:13px 14px 14px;margin-top:10px;
+  }
+  .stamp.live{border-color:rgba(15,110,90,.45)}
+  .stamp-head{display:flex;align-items:baseline;gap:8px;margin-bottom:1px}
+  .stamp-head .lbl{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+  .stamp-head .dt{font-size:11px;color:var(--faint);letter-spacing:.2px;flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stamp-state{font-size:14px;color:var(--ink);margin:5px 0 12px;line-height:1.35}
+  .stamp-state .big{font-size:23px;font-weight:800;font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.5px;line-height:1.1;display:block}
+  .stamp-state .big small{font-size:12px;font-weight:600;color:var(--muted);margin-left:5px;font-family:var(--sans);letter-spacing:0}
+  .stamp-state .sub{display:block;font-size:12.5px;color:var(--muted);margin-top:4px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .stamp-state strong{font-weight:800}
+  .stamp-btns{display:flex;gap:9px}
+  .sbtn{
+    flex:1;appearance:none;border:0;border-radius:13px;
+    padding:15px 8px;font-size:15px;font-weight:800;letter-spacing:.3px;
+    cursor:pointer;font-family:var(--sans);color:#fff;background:var(--brand);
+    display:flex;align-items:center;justify-content:center;gap:7px;min-height:56px;
+    white-space:nowrap;
+  }
+  .sbtn:active{transform:translateY(1px)}
+  .sbtn .ico{font-size:15px;line-height:1}
+  .sbtn.stop{background:var(--bar)}
+  .sbtn.soft{background:var(--card);color:var(--ink);border:1px solid var(--line);flex:0 0 38%}
+  .sbtn.small{min-height:44px;padding:11px 16px;font-size:13.5px;flex:0 0 auto;font-weight:700}
+  @media (max-width:339px){
+    .sbtn{font-size:13.5px;padding:14px 6px;gap:5px}
+    .sbtn.soft{flex:0 0 34%}
+  }
+  .stamp-edit{
+    appearance:none;border:0;background:none;color:var(--muted);
+    font-size:12.5px;font-weight:700;cursor:pointer;padding:10px 2px 0;
+    text-decoration:underline;text-underline-offset:3px;font-family:var(--sans);
+  }
+  .stamp-done{display:flex;align-items:center;gap:10px}
+  .stamp-done .sum{flex:1;min-width:0}
+  .stamp-done .sum .t{font-size:13.5px;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stamp-done .sum .d{font-size:12.5px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+  .stamp-done .sum .d .pos{color:var(--brand);font-weight:700}
+  .stamp-done .sum .d .neg{color:var(--minus);font-weight:700}
+
+  /* ---------- Nachtrag-Banner (offener Vortag) ---------- */
+  .openday{
+    display:flex;align-items:center;gap:10px;
+    background:#fdf6e3;border:1px solid rgba(202,166,74,.55);border-radius:13px;
+    padding:11px 12px;margin-top:10px;
+  }
+  .openday .txt{flex:1;min-width:0;font-size:12.5px;color:#7a5f12;line-height:1.4}
+  .openday .txt strong{color:#5b4809;font-weight:800}
+  .openday button{
+    appearance:none;border:0;border-radius:10px;background:var(--accent);color:#2b2205;
+    font-size:12.5px;font-weight:800;padding:10px 13px;cursor:pointer;font-family:var(--sans);
+    flex:0 0 auto;
+  }
+  .openday button:active{transform:translateY(1px)}
+
   /* ---------- Druckbericht: am Bildschirm ausgeblendet ---------- */
   #report{display:none}
 
@@ -348,6 +406,7 @@
   <button id="nextM" aria-label="Nächster Monat">›</button>
 </div>
 
+<div class="wrap" id="stampWrap" style="padding-bottom:0"></div>
 <main class="wrap" id="weeks"></main>
 
 <nav class="bottom">
@@ -434,9 +493,9 @@
   <!-- === Erinnerung (Push) — wird ausgeblendet wenn PUSH_CONFIG leer === -->
   <div class="divider" id="pushDivider"></div>
   <div id="pushSection">
-    <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Erinnerung</label>
+    <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Erinnerungen</label>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <span style="flex:1;font-size:14px">Tägliche Erinnerung um 20 Uhr</span>
+      <span style="flex:1;font-size:14px">Erinnerungen auf dieses Gerät</span>
       <label style="position:relative;display:inline-block;width:44px;height:26px;flex:0 0 auto">
         <input type="checkbox" id="pushToggle" style="opacity:0;width:0;height:0;position:absolute">
         <span id="pushTrack" style="
@@ -450,7 +509,16 @@
         "></span>
       </label>
     </div>
-    <p class="hint" style="margin-top:0">Wenn bis 20 Uhr kein Zeiteintrag erfasst wurde, erhältst du eine Push-Benachrichtigung.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:12px">Es wird nur erinnert, wenn der Eintrag wirklich noch fehlt — und nur an Arbeitstagen.</p>
+
+    <div class="sollgrid">
+      <div class="field"><label>Arbeitsbeginn</label><input type="time" id="rStart"></div>
+      <div class="field"><label>Pause</label><input type="time" id="rPause"></div>
+      <div class="field"><label>Feierabend</label><input type="time" id="rEnd"></div>
+      <div class="field"><label>Tagescheck</label><input type="time" id="rDay"></div>
+    </div>
+    <p class="hint">Ein leeres Feld schaltet die jeweilige Erinnerung ab. Der Tagescheck meldet sich nur, wenn für den Tag noch gar nichts erfasst ist.</p>
+    <button class="btn ghost" id="testPushBtn" style="width:100%">Test-Benachrichtigung senden</button>
   </div>
   <!-- === Ende Erinnerung === -->
 
@@ -526,7 +594,9 @@ function defaultState(){
       soll:{1:450,2:450,3:450,4:450,5:300,6:0,7:0},
       urlaubsanspruch:30,
       showWeekend:true,
-      showTotalSaldo:true
+      showTotalSaldo:true,
+      // Erinnerungszeiten; leerer Wert = dieser Anlass ist abgeschaltet
+      reminders:{start:"07:45",pause:"12:35",end:"15:45",day:"20:00"}
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -550,6 +620,9 @@ function migrate(s){
   if(typeof s.settings.showWeekend !== "boolean") s.settings.showWeekend = true;
   // Additiv: showTotalSaldo-Default sicherstellen (true wenn fehlt — Gesamt-Zelle sichtbar)
   if(typeof s.settings.showTotalSaldo !== "boolean") s.settings.showTotalSaldo = true;
+  // Additiv: Erinnerungszeiten (fehlende Anlaesse bekommen die Voreinstellung)
+  s.settings.reminders = Object.assign({start:"07:45",pause:"12:35",end:"15:45",day:"20:00"},
+                                        s.settings.reminders || {});
   s.entries = s.entries || {};
   // Additiv: bestehende Eintraege ohne type bekommen type:"work"
   for(const key of Object.keys(s.entries)){
@@ -688,6 +761,7 @@ let editKey = null;
 const $ = id => document.getElementById(id);
 
 function render(){
+  renderToday();
   // Kopf
   $("empLabel").textContent = state.settings.employer ? state.settings.employer : "Arbeitgeber einrichten";
   $("monthName").textContent = MONTHS[view.getMonth()];
@@ -818,6 +892,211 @@ function renderDay(d,key,viewMonth,todayKey){
 function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 /* ============================================================
+   MODUL 3b — Stempeluhr "Heute" (Ein-Tipp-Erfassung)
+   Arbeitet ausschliesslich auf dem bestehenden Datenmodell:
+   entries[key] = {type:"work", start, bStart, bEnd, end, note}
+   Es wird nicht gerundet — gestempelt wird die exakte Minute.
+============================================================ */
+const TYPE_LABEL = {urlaub:"Urlaub", krank:"Krank", feiertag:"Feiertag"};
+const STAMP_KINDS = ["start","break","resume","end"];
+
+// Jetzt-Uhrzeit als "HH:MM" bzw. Minuten seit Mitternacht
+function hhmmNow(){ const n=new Date(); return pad(n.getHours())+":"+pad(n.getMinutes()); }
+function minNow(){ const n=new Date(); return n.getHours()*60+n.getMinutes(); }
+
+// Zustand des heutigen Tages: "nonwork" | "idle" | "working" | "onbreak" | "done"
+function stampState(e){
+  if(e && !isWork(e)) return "nonwork";
+  if(!e || !e.start) return "idle";
+  if(e.end) return "done";
+  if(e.bStart && !e.bEnd) return "onbreak";
+  return "working";
+}
+
+// Bisher gearbeitete Minuten am laufenden Tag (laufende Pause wird abgezogen)
+function workedSoFar(e){
+  const s=toMin(e.start); if(s==null) return 0;
+  const now=minNow();
+  let net=now-s;
+  const bs=toMin(e.bStart), be=toMin(e.bEnd);
+  if(bs!=null && be!=null) net-=(be-bs);
+  else if(bs!=null) net-=Math.max(0, now-bs);
+  return Math.max(0,net);
+}
+
+// Juengster Vortag (max. 14 Tage zurueck) mit Beginn, aber ohne Ende
+function findOpenDay(){
+  for(let i=1;i<=14;i++){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const k=ymd(d); const e=state.entries[k];
+    if(e && isWork(e) && e.start && !e.end) return k;
+  }
+  return null;
+}
+
+// Live-Ticker: laeuft nur waehrend Arbeit/Pause, damit die Dauer mitwaechst
+let stampTimer=null;
+function scheduleStampTick(st){
+  clearInterval(stampTimer); stampTimer=null;
+  if(st==="working" || st==="onbreak") stampTimer=setInterval(renderToday, 30000);
+}
+
+function renderToday(){
+  const wrap=$("stampWrap"); if(!wrap) return;
+  const key=ymd(new Date());
+  const d=parseYmd(key);
+  const e=state.entries[key];
+  const st=stampState(e);
+  const dateStr=DOW_LONG[d.getDay()]+", "+d.getDate()+". "+MONTHS[d.getMonth()];
+  let label="Heute", body;
+
+  if(st==="nonwork"){
+    body='<div class="stamp-state">Eingetragen als <strong>'+TYPE_LABEL[e.type]+'</strong>'+
+         '<span class="sub">'+fmtDur(sollMin(d))+' Std gutgeschrieben · Saldo 0:00</span></div>'+
+         '<div class="stamp-done"><div class="sum"></div>'+
+         '<button class="sbtn soft small" data-act="edit">Ändern</button></div>';
+  } else if(st==="idle" && sollMin(d)===0){
+    body='<div class="stamp-state">Heute ist kein Arbeitstag<span class="sub">Soll 0:00 Std</span></div>'+
+         '<div class="stamp-btns"><button class="sbtn soft" data-act="start" style="flex:1">'+
+           '<span class="ico">▶</span>TROTZDEM STEMPELN</button></div>';
+  } else if(st==="idle"){
+    body='<div class="stamp-state">Noch nicht gestempelt'+
+         '<span class="sub">Soll heute '+fmtDur(sollMin(d))+' Std</span></div>'+
+         '<div class="stamp-btns"><button class="sbtn" data-act="start">'+
+           '<span class="ico">▶</span>KOMMEN</button></div>'+
+         '<button class="stamp-edit" data-act="edit">Zeiten von Hand eintragen</button>';
+  } else if(st==="working"){
+    const hadBreak=!!(e.bStart && e.bEnd);
+    body='<div class="stamp-state"><span class="big">'+fmtDur(workedSoFar(e))+'<small>Std</small></span>'+
+         '<span class="sub">seit '+e.start+(hadBreak?' · Pause '+e.bStart+'–'+e.bEnd:'')+'</span></div>'+
+         '<div class="stamp-btns">'+
+           (hadBreak?'':'<button class="sbtn soft" data-act="break"><span class="ico">⏸</span>PAUSE</button>')+
+           '<button class="sbtn stop" data-act="end"><span class="ico">⏹</span>FEIERABEND</button>'+
+         '</div>'+
+         '<button class="stamp-edit" data-act="edit">Zeiten korrigieren</button>';
+  } else if(st==="onbreak"){
+    const pauseMin=Math.max(0, minNow()-toMin(e.bStart));
+    body='<div class="stamp-state"><span class="big">'+fmtDur(pauseMin)+'<small>Std Pause</small></span>'+
+         '<span class="sub">seit '+e.bStart+' · davor '+fmtDur(workedSoFar(e))+' Std gearbeitet</span></div>'+
+         '<div class="stamp-btns">'+
+           '<button class="sbtn" data-act="resume"><span class="ico">▶</span>WEITER</button>'+
+           '<button class="sbtn stop" data-act="end"><span class="ico">⏹</span>FEIERABEND</button>'+
+         '</div>'+
+         '<button class="stamp-edit" data-act="edit">Zeiten korrigieren</button>';
+  } else {
+    label="Heute · erfasst";
+    const diff=dayDiff(d,e);
+    const pause=(e.bStart&&e.bEnd)?' (−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)':'';
+    body='<div class="stamp-done"><div class="sum">'+
+           '<div class="t">'+e.start+' – '+e.end+pause+'</div>'+
+           '<div class="d">'+fmtDur(netMin(e))+' Std · <span class="'+diffClass(diff)+'">'+fmtSigned(diff)+'</span></div>'+
+         '</div><button class="sbtn soft small" data-act="edit">Ändern</button></div>';
+  }
+
+  let html='<section class="stamp'+((st==="working"||st==="onbreak")?' live':'')+'">'+
+    '<div class="stamp-head"><span class="lbl">'+label+'</span><span class="dt">'+dateStr+'</span></div>'+
+    body+'</section>';
+
+  // Sicherheitsnetz: vergessenes Ende an einem frueheren Tag
+  const openKey=findOpenDay();
+  if(openKey){
+    const od=parseYmd(openKey);
+    html+='<div class="openday"><div class="txt"><strong>'+DOW_SHORT[od.getDay()]+', '+
+          pad(od.getDate())+'.'+pad(od.getMonth()+1)+'.</strong> – das Ende fehlt noch</div>'+
+          '<button data-act="openday" data-key="'+openKey+'">Nachtragen</button></div>';
+  }
+
+  wrap.innerHTML=html;
+  scheduleStampTick(st);
+}
+
+// Ein Stempelvorgang. Geschrieben wird nur, was zweifelsfrei ist — sonst
+// oeffnet sich der Tag-Editor, damit keine Zeit erfunden wird.
+function stampNow(kind){
+  if(STAMP_KINDS.indexOf(kind)===-1) return;
+  const key=ymd(new Date());
+  const now=hhmmNow();
+  const existing=state.entries[key];
+
+  if(existing && !isWork(existing)){
+    toast("Heute ist als "+TYPE_LABEL[existing.type]+" eingetragen");
+    return;
+  }
+  const e=Object.assign({type:"work",start:"",bStart:"",bEnd:"",end:"",note:""}, existing||{});
+
+  if(kind==="start"){
+    if(e.start){ toast("Beginn steht schon: "+e.start); return; }
+    e.start=now;
+    toast("Beginn "+now+" gespeichert");
+  }
+  else if(kind==="break"){
+    if(!e.start){ toast("Zuerst Kommen stempeln"); return; }
+    if(e.end){ toast("Der Tag ist schon abgeschlossen"); return; }
+    if(e.bStart && !e.bEnd){ toast("Pause läuft schon seit "+e.bStart); return; }
+    if(e.bStart && e.bEnd){ openDay(key); toast("Pause ist schon erfasst – hier ändern"); return; }
+    e.bStart=now; e.bEnd="";
+    toast("Pause ab "+now);
+  }
+  else if(kind==="resume"){
+    if(!e.bStart || e.bEnd){ toast("Es läuft gerade keine Pause"); return; }
+    if(toMin(now) < toMin(e.bStart)){ toast("Pausenende läge vor dem Pausenbeginn"); return; }
+    e.bEnd=now;
+    toast("Pause "+e.bStart+"–"+now+" erfasst");
+  }
+  else if(kind==="end"){
+    if(e.end){ toast("Feierabend steht schon: "+e.end); return; }
+    if(!e.start){
+      // Beginn fehlt (z. B. Verknuepfung ohne "Kommen") — nicht raten, sondern nachfragen
+      openDay(key, {end:now});
+      toast("Beginn fehlt – bitte prüfen und speichern");
+      return;
+    }
+    if(e.bStart && !e.bEnd){
+      // Feierabend aus der laufenden Pause heraus: der Arbeitstag endete beim Pausenbeginn
+      const bs=e.bStart;
+      e.end=bs; e.bStart=""; e.bEnd="";
+      state.entries[key]=e; saveState(); render();
+      if(typeof pushHeartbeat==="function") pushHeartbeat();
+      toast("Feierabend "+bs+" (ab Pausenbeginn)");
+      return;
+    }
+    if(toMin(now) <= toMin(e.start)){
+      openDay(key, {end:now});
+      toast("Ende läge vor dem Beginn – bitte prüfen");
+      return;
+    }
+    e.end=now;
+    toast("Feierabend "+now+" · "+fmtDur(netMin(e))+" Std");
+  }
+
+  state.entries[key]=e;
+  saveState();
+  render();
+  if(typeof pushHeartbeat==="function") pushHeartbeat();
+}
+
+$("stampWrap").addEventListener("click", ev=>{
+  const btn=ev.target.closest("[data-act]"); if(!btn) return;
+  const act=btn.getAttribute("data-act");
+  if(act==="edit"){ openDay(ymd(new Date())); return; }
+  if(act==="openday"){ openDay(btn.getAttribute("data-key")); return; }
+  stampNow(act);
+});
+
+// Rueckkehr zur App: Dauer aktualisieren und einen Datumswechsel mitnehmen
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) render(); });
+
+// Einstieg von aussen: Homescreen-Verknuepfung oder Benachrichtigungs-Aktion
+function handleStampParam(){
+  try{
+    const kind=new URLSearchParams(location.search).get("stamp");
+    if(!kind) return;
+    history.replaceState(null,"",location.pathname);
+    stampNow(kind);
+  }catch(err){}
+}
+
+/* ============================================================
    Tag-Editor
 ============================================================ */
 // Tagestyp-Segment: aktiven Typ setzen und UI umschalten
@@ -845,10 +1124,10 @@ function activeType(){
   return active ? active.getAttribute("data-type") : "work";
 }
 
-function openDay(key){
+function openDay(key, overrides){
   editKey=key;
   const d=parseYmd(key);
-  const e=state.entries[key] || defaultEntryFor(d);
+  const e=Object.assign({}, state.entries[key] || defaultEntryFor(d), overrides||{});
   $("dayTitle").textContent = DOW_LONG[d.getDay()];
   $("dayMeta").textContent = pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+"  ·  Soll "+fmtDur(sollMin(d))+" Std";
   $("fStart").value=e.start||""; $("fEnd").value=e.end||"";
@@ -937,6 +1216,10 @@ function openSettings(){
     f.innerHTML='<label>'+name+'</label><input type="time" data-soll="'+k+'" value="'+fmtHHMM(min)+'">';
     g.appendChild(f);
   }
+  // Erinnerungszeiten in die Felder schreiben
+  const rem = state.settings.reminders || {};
+  const REM_FIELDS = {rStart:"start", rPause:"pause", rEnd:"end", rDay:"day"};
+  for(const id in REM_FIELDS){ const el=$(id); if(el) el.value = rem[REM_FIELDS[id]] || ""; }
   // Wochenend-Toggle initialisieren
   const showWE = state.settings.showWeekend !== false;
   const weToggle=$("weekendToggle"), weTrack=$("weekendTrack"), weThumb=$("weekendThumb");
@@ -981,7 +1264,16 @@ $("saveSet").onclick=()=>{
   // Gesamt-Überstunden-Einstellung speichern
   const totToggle=$("totalToggle");
   state.settings.showTotalSaldo = totToggle ? totToggle.checked : true;
+  // Erinnerungszeiten speichern (leeres Feld = Anlass aus)
+  state.settings.reminders = {
+    start: $("rStart") ? $("rStart").value : "",
+    pause: $("rPause") ? $("rPause").value : "",
+    end:   $("rEnd")   ? $("rEnd").value   : "",
+    day:   $("rDay")   ? $("rDay").value   : ""
+  };
   saveState(); hideSheets(); render(); toast("Einstellungen gespeichert");
+  // Geaenderte Zeiten dem Erinnerungsdienst melden
+  if(typeof pushHeartbeat==="function") pushHeartbeat();
 };
 $("resetBtn").onclick=()=>{
   if(confirm("Wirklich ALLE erfassten Zeiten und Einstellungen löschen?")){
@@ -1146,6 +1438,7 @@ function toast(msg){
 }
 
 render();
+handleStampParam();
 
 /* ============================================================
    PWA — Persistenter Speicher
@@ -1164,9 +1457,21 @@ if ('serviceWorker' in navigator) {
   let swReloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (swReloading) return;
+    // Nicht mitten in einer Eingabe neu laden — ein offenes Sheet würde
+    // sonst kommentarlos verschwinden (z. B. beim Stempeln per Verknüpfung).
+    // Die neue Version greift dann beim nächsten Start.
+    if (document.querySelector('.sheet.show')) return;
     swReloading = true;
     location.reload();
   });
+
+  // Aktion aus einer Benachrichtigung, wenn die App schon offen ist
+  navigator.serviceWorker.addEventListener('message', ev => {
+    const msg = ev.data;
+    if (msg && msg.type === 'stamp') stampNow(msg.kind);
+  });
+  // Bei addEventListener bleiben Nachrichten sonst in der Warteschlange liegen
+  if (navigator.serviceWorker.startMessages) navigator.serviceWorker.startMessages();
 }
 </script>
 
@@ -1246,6 +1551,9 @@ function initPushUI() {
       await pushUnsubscribe();
     }
   });
+
+  const testBtn = document.getElementById("testPushBtn");
+  if (testBtn) testBtn.addEventListener("click", pushTest);
 }
 
 /* ---- Subscribe ---- */
@@ -1275,7 +1583,7 @@ async function pushSubscribe() {
     fetch(PUSH_CONFIG.workerUrl + "/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub.toJSON(), workdays: currentWorkdays() })
+      body: JSON.stringify({ subscription: sub.toJSON(), workdays: currentWorkdays(), times: currentTimes() })
     }).catch(() => {});
     const ps = { enabled: true, endpoint: sub.endpoint };
     savePushState(ps);
@@ -1321,6 +1629,25 @@ function currentWorkdays() {
   return [1,2,3,4,5,6,7].filter(k => (Number(state.settings.soll[k]) || 0) > 0);
 }
 
+// Eingestellte Erinnerungszeiten
+function currentTimes() {
+  const r = state.settings.reminders || {};
+  return { start: r.start || "", pause: r.pause || "", end: r.end || "", day: r.day || "" };
+}
+
+// Welche Schritte des heutigen Tages sind erledigt?
+function todayStatus() {
+  const e = state.entries[ymd(new Date())];
+  if (!e) return { hasStart: false, hasBreak: false, hasEnd: false };
+  // Urlaub/Krank/Feiertag: der Tag ist fertig, nichts steht mehr aus
+  if (!isWork(e)) return { hasStart: true, hasBreak: true, hasEnd: true };
+  return {
+    hasStart: !!e.start,
+    hasBreak: !!(e.bStart && e.bEnd),
+    hasEnd: !!e.end
+  };
+}
+
 function pushHeartbeat() {
   if (!pushConfigActive()) return;
   try {
@@ -1328,15 +1655,51 @@ function pushHeartbeat() {
     if (!ps.enabled || !ps.endpoint) return;
     const todayKey = ymd(new Date());
     const e = state.entries[todayKey];
-    // "logged" = heute liegt ein Eintrag vor (Arbeit mit Zeiten ODER Urlaub/Krank/Feiertag)
+    // "logged" = heute liegt ein vollstaendiger Eintrag vor
     const logged = !!(e && (!isWork(e) || (e.start && e.end)));
-    // Immer senden (wenn aktiviert): meldet Arbeitstage + heutigen Status an den Worker
+    // Immer senden (wenn aktiviert): Arbeitstage, Zeiten und Tagesstatus melden
     fetch(PUSH_CONFIG.workerUrl + "/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: ps.endpoint, date: todayKey, logged: logged, workdays: currentWorkdays() })
+      body: JSON.stringify({
+        endpoint: ps.endpoint,
+        date: todayKey,
+        logged: logged,
+        workdays: currentWorkdays(),
+        times: currentTimes(),
+        status: todayStatus()
+      })
     }).catch(() => {});
   } catch (e) {}
+}
+
+/* ---- Test-Benachrichtigung (Diagnose auf dem Geraet) ---- */
+
+async function pushTest() {
+  const ps = loadPushState();
+  if (!ps.enabled || !ps.endpoint) {
+    toast("Erinnerungen zuerst einschalten");
+    return;
+  }
+  toast("Test wird gesendet …");
+  try {
+    const resp = await fetch(PUSH_CONFIG.workerUrl + "/testpush", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: ps.endpoint })
+    });
+    if (resp.ok) {
+      toast("Gesendet — die Meldung kommt gleich");
+    } else if (resp.status === 429) {
+      toast("Bitte eine Minute warten");
+    } else if (resp.status === 410 || resp.status === 404) {
+      toast("Abo abgelaufen — Erinnerung aus- und wieder einschalten");
+    } else {
+      toast("Test fehlgeschlagen (Fehler " + resp.status + ")");
+    }
+  } catch (e) {
+    toast("Kein Netz — Test nicht möglich");
+  }
 }
 
 /* ---- Initialisierung ---- */
@@ -1354,8 +1717,14 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 4;
+  const APP_VERSION = 5;
   const WHATS_NEW = [
+    { v: 5, items: [
+      "Stempeln mit einem Tipp: Kommen, Pause, Feierabend — oben auf der Startseite",
+      "Erinnerung zum Arbeitsbeginn, zur Pause und zum Feierabend (Zeiten in den Einstellungen)",
+      "Hinweis, wenn an einem früheren Tag das Ende fehlt",
+      "App-Symbol gedrückt halten: Kommen oder Feierabend direkt stempeln"
+    ]},
     { v: 4, items: [
       "Gesamt-Überstunden in der Fußzeile (in den Einstellungen abschaltbar)"
     ]},

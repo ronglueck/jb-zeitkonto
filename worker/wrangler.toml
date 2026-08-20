@@ -3,11 +3,13 @@ main            = "worker.js"
 compatibility_date = "2026-06-23"
 
 # ---------------------------------------------------------------------------
-# Cron-Trigger: laueft 18 UTC (= 20 CEST, Sommer) und 19 UTC (= 20 CET, Winter).
-# Der Worker prueft selbst, ob Berlin-Stunde === 20, und sendet nur einmal.
+# Cron-Trigger: alle 5 Minuten. Der Worker rechnet selbst in Europe/Berlin und
+# schickt pro Abo nur die Erinnerung, deren eingestellte Uhrzeit gerade erreicht
+# ist UND deren Schritt (Beginn/Pause/Ende) heute noch fehlt. Die "sent"-Liste
+# im KV verhindert Doppelversand, auch ueber die Sommer-/Winterzeit-Umstellung.
 # ---------------------------------------------------------------------------
 [triggers]
-crons = ["0 18 * * *", "0 19 * * *"]
+crons = ["*/5 * * * *"]
 
 # ---------------------------------------------------------------------------
 # KV-Namespace

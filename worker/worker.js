@@ -7,12 +7,21 @@
  *   OPTIONS *          -> 204 CORS-Preflight
  *   GET  /             -> 200 "Zeitkonto Push OK" (Health-Check)
  *   POST /subscribe    -> Abo speichern
- *   POST /heartbeat    -> lastLogged aktualisieren
+ *   POST /heartbeat    -> Tagesstatus + Erinnerungszeiten aktualisieren
+ *   POST /pending      -> welcher Anlass zuletzt gesendet wurde (fuer den Service Worker)
+ *   POST /testpush     -> Sofort-Push zum Pruefen der Zustellung
  *   POST /unsubscribe  -> Abo loeschen
  *
  * KV-Binding: env.PUSH_KV
  *   Key: "s:" + sha256hex(endpoint)
- *   Val: JSON { subscription: {...}, lastLogged: "YYYY-MM-DD" | null, workdays: number[] | null }
+ *   Val: JSON {
+ *     subscription: {...},
+ *     lastLogged:  "YYYY-MM-DD" | null,     // Tag vollstaendig erfasst
+ *     workdays:    number[] | null,          // ISO 1=Mo .. 7=So
+ *     times:       { start, pause, end, day } | null,  // "HH:MM", leer = aus
+ *     status:      { date, hasStart, hasBreak, hasEnd } | null,
+ *     sent:        { date, kinds: string[], lastKind, testAt } | null
+ *   }
  *
  * Secrets (wrangler secret put):
  *   VAPID_PRIVATE_KEY  base64url, 32-Byte d
@@ -22,6 +31,26 @@
  *   VAPID_SUBJECT      mailto: oder https: URI
  *   ALLOW_ORIGIN       z.B. "https://ronglueck.github.io"
  */
+
+// ---------------------------------------------------------------------------
+// Konstanten
+// ---------------------------------------------------------------------------
+
+/** Erinnerungsanlaesse in der Reihenfolge, in der sie am Tag auftreten. */
+const KINDS = ["start", "pause", "end", "day"];
+
+/** Voreinstellung, falls ein Abo noch keine Zeiten gemeldet hat. */
+const DEFAULT_TIMES = { start: "07:45", pause: "12:35", end: "15:45", day: "20:00" };
+
+/**
+ * Zeitfenster nach der eingestellten Uhrzeit, in dem noch erinnert wird.
+ * Grosszuegig genug, um einen ausgefallenen Cron-Lauf zu ueberbruecken;
+ * gegen Doppelversand schuetzt die "sent"-Liste.
+ */
+const WINDOW_MIN = 30;
+
+/** Mindestabstand zwischen zwei Test-Benachrichtigungen (Missbrauchsbremse). */
+const TEST_COOLDOWN_MS = 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -64,6 +93,103 @@ function normWorkdays(input) {
     if (n >= 1 && n <= 7 && !out.includes(n)) out.push(n);
   }
   return out.length ? out : null;
+}
+
+/** "HH:MM" -> Minuten seit Mitternacht, sonst null. */
+function hhmmToMin(str) {
+  if (typeof str !== "string") return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(str.trim());
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mi = parseInt(m[2], 10);
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
+/**
+ * Normalisiert die gemeldeten Erinnerungszeiten.
+ * Leerer/ungueltiger Wert = dieser Anlass ist abgeschaltet.
+ * Gibt null zurueck, wenn gar nichts Brauchbares dabei war.
+ */
+function normTimes(input) {
+  if (!input || typeof input !== "object") return null;
+  const out = {};
+  let any = false;
+  for (const kind of KINDS) {
+    const min = hhmmToMin(input[kind]);
+    if (min == null) {
+      out[kind] = "";
+    } else {
+      out[kind] = input[kind].trim();
+      any = true;
+    }
+  }
+  return any ? out : { start: "", pause: "", end: "", day: "" };
+}
+
+/** Tagesstatus aus dem Request normalisieren. */
+function normStatus(input, date) {
+  if (!input || typeof input !== "object") return null;
+  return {
+    date: date || null,
+    hasStart: !!input.hasStart,
+    hasBreak: !!input.hasBreak,
+    hasEnd: !!input.hasEnd,
+  };
+}
+
+/** Aktueller Zeitpunkt in Europe/Berlin: {date:"YYYY-MM-DD", min, isoWeekday}. */
+function berlinNow() {
+  const now = new Date();
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(now);
+  const hm = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  const [h, m] = hm.split(":").map(Number);
+  // Mittag-UTC vermeidet Zeitzonen-Raender bei der Wochentagsberechnung
+  const isoWeekday = ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) + 1;
+  return { date, min: h * 60 + m, isoWeekday };
+}
+
+/**
+ * Entscheidet, welche Erinnerung fuer ein Abo gerade faellig ist.
+ * Gibt den Anlass ("start" | "pause" | "end" | "day") zurueck oder null.
+ */
+function dueKind(record, now) {
+  const times = record.times && typeof record.times === "object" ? record.times : DEFAULT_TIMES;
+
+  // Tagesstatus gilt nur fuer den heutigen Tag
+  const st = record.status && record.status.date === now.date
+    ? record.status
+    : { hasStart: false, hasBreak: false, hasEnd: false };
+  const loggedToday = record.lastLogged === now.date;
+
+  // Bereits heute gesendete Anlaesse nicht wiederholen
+  const sentKinds = record.sent && record.sent.date === now.date && Array.isArray(record.sent.kinds)
+    ? record.sent.kinds
+    : [];
+
+  // Spaetesten faelligen Anlass gewinnen lassen (KINDS ist chronologisch)
+  let due = null;
+  for (const kind of KINDS) {
+    const t = hhmmToMin(times[kind]);
+    if (t == null) continue;                       // abgeschaltet
+    if (now.min < t || now.min >= t + WINDOW_MIN) continue;  // nicht im Fenster
+    if (sentKinds.includes(kind)) continue;        // heute schon erinnert
+
+    // Nur erinnern, wenn der Schritt tatsaechlich noch fehlt
+    let missing = false;
+    if (kind === "start") missing = !st.hasStart && !st.hasEnd && !loggedToday;
+    else if (kind === "pause") missing = st.hasStart && !st.hasBreak && !st.hasEnd;
+    else if (kind === "end") missing = st.hasStart && !st.hasEnd;
+    else if (kind === "day") missing = !loggedToday;
+
+    if (missing) due = kind;
+  }
+  return due;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +352,14 @@ async function handleFetch(request, env) {
     }
 
     const key = "s:" + (await sha256hex(subscription.endpoint));
-    const record = { subscription, lastLogged: null, workdays: normWorkdays(body?.workdays) };
+    const record = {
+      subscription,
+      lastLogged: null,
+      workdays: normWorkdays(body?.workdays),
+      times: normTimes(body?.times) || { ...DEFAULT_TIMES },
+      status: null,
+      sent: null,
+    };
     await env.PUSH_KV.put(key, JSON.stringify(record));
 
     return jsonResponse({ ok: true }, 200, env);
@@ -255,6 +388,12 @@ async function handleFetch(request, env) {
       const record = JSON.parse(raw);
       // Arbeitstage aktualisieren, falls mitgeschickt
       if (Array.isArray(body?.workdays)) record.workdays = normWorkdays(body.workdays);
+      // Erinnerungszeiten aktualisieren, falls mitgeschickt
+      const times = normTimes(body?.times);
+      if (times) record.times = times;
+      // Tagesstatus (Beginn/Pause/Ende) uebernehmen
+      const status = normStatus(body?.status, date);
+      if (status) record.status = status;
       // lastLogged nur setzen, wenn heute erfasst (logged===true).
       // Alte Clients ohne logged-Flag: vorhandenes date impliziert "erfasst".
       if (date && (logged === true || logged === undefined)) {
@@ -264,6 +403,77 @@ async function handleFetch(request, env) {
     }
     // Unbekanntes Abo: ignorieren, trotzdem 200
 
+    return jsonResponse({ ok: true }, 200, env);
+  }
+
+  // ---------- POST /pending ----------
+  // Der Service Worker fragt beim Eintreffen eines (payloadlosen) Push,
+  // worum es gerade geht — so braucht die Benachrichtigung keinen Payload.
+  if (method === "POST" && url.pathname === "/pending") {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return jsonResponse({ ok: false, error: "Invalid JSON" }, 400, env);
+    }
+    const endpoint = body?.endpoint;
+    if (!endpoint) {
+      return jsonResponse({ ok: false, error: "endpoint erforderlich" }, 400, env);
+    }
+
+    const key = "s:" + (await sha256hex(endpoint));
+    const raw = await env.PUSH_KV.get(key);
+    if (!raw) return jsonResponse({ ok: true, kind: null }, 200, env);
+
+    const record = JSON.parse(raw);
+    const now = berlinNow();
+    const kind = record.sent && record.sent.date === now.date ? record.sent.lastKind || null : null;
+    return jsonResponse({ ok: true, kind }, 200, env);
+  }
+
+  // ---------- POST /testpush ----------
+  // Diagnose: schickt sofort eine Benachrichtigung an genau dieses Abo.
+  if (method === "POST" && url.pathname === "/testpush") {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return jsonResponse({ ok: false, error: "Invalid JSON" }, 400, env);
+    }
+    const endpoint = body?.endpoint;
+    if (!endpoint) {
+      return jsonResponse({ ok: false, error: "endpoint erforderlich" }, 400, env);
+    }
+
+    const key = "s:" + (await sha256hex(endpoint));
+    const raw = await env.PUSH_KV.get(key);
+    if (!raw) return jsonResponse({ ok: false, error: "Abo unbekannt" }, 404, env);
+
+    const record = JSON.parse(raw);
+    const sent = record.sent || {};
+    if (sent.testAt && Date.now() - sent.testAt < TEST_COOLDOWN_MS) {
+      return jsonResponse({ ok: false, error: "Bitte kurz warten" }, 429, env);
+    }
+
+    // "test" als Anlass hinterlegen, damit der Service Worker den Text kennt
+    const now = berlinNow();
+    record.sent = {
+      date: now.date,
+      kinds: sent.date === now.date && Array.isArray(sent.kinds) ? sent.kinds : [],
+      lastKind: "test",
+      testAt: Date.now(),
+    };
+    await env.PUSH_KV.put(key, JSON.stringify(record));
+
+    try {
+      const alive = await sendPush(record.subscription, env);
+      if (!alive) {
+        await env.PUSH_KV.delete(key);
+        return jsonResponse({ ok: false, error: "Abo abgelaufen" }, 410, env);
+      }
+    } catch (err) {
+      return jsonResponse({ ok: false, error: err.message }, 502, env);
+    }
     return jsonResponse({ ok: true }, 200, env);
   }
 
@@ -292,38 +502,13 @@ async function handleFetch(request, env) {
 }
 
 // ---------------------------------------------------------------------------
-// Scheduled-Handler (Cron)
+// Scheduled-Handler (Cron, alle 5 Minuten)
 // ---------------------------------------------------------------------------
 
 async function handleScheduled(event, env) {
-  // Berlin-Stunde bestimmen (DST-sicher)
-  const berlinHour = parseInt(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Berlin",
-      hour: "2-digit",
-      hour12: false,
-    }).format(new Date()),
-    10
-  );
+  const now = berlinNow();
 
-  // Nur weitermachen, wenn es gerade 20 Uhr Berlin-Zeit ist
-  // (verhindert Doppelversand: Worker laeuft 18 UTC = 20 CEST und 19 UTC = 20 CET)
-  if (berlinHour !== 20) {
-    console.log(`Cron: Berlin-Stunde ist ${berlinHour}, kein Versand.`);
-    return;
-  }
-
-  // Heutiges Datum in Berlin
-  const todayBerlin = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Berlin",
-  }).format(new Date()); // "YYYY-MM-DD"
-
-  // ISO-Wochentag (1=Mo .. 7=So) fuer das Berlin-Datum (Mittag-UTC vermeidet TZ-Raender)
-  const isoWeekday = ((new Date(todayBerlin + "T12:00:00Z").getUTCDay() + 6) % 7) + 1;
-
-  console.log(`Cron: Berlin 20 Uhr, Datum ${todayBerlin} (ISO-Wochentag ${isoWeekday}) — starte Push-Versand.`);
-
-  // Alle "s:"-Keys laden
+  // Alle "s:"-Keys durchgehen
   let cursor;
   let sentCount = 0;
   let cleanedCount = 0;
@@ -344,31 +529,37 @@ async function handleScheduled(event, env) {
         continue;
       }
 
-      const { subscription, lastLogged } = record;
-
       // Nur an Arbeitstagen erinnern (Default Mo-Fr, falls noch keine Arbeitstage gemeldet)
       const workdays = (Array.isArray(record.workdays) && record.workdays.length)
         ? record.workdays
         : [1, 2, 3, 4, 5];
-      if (!workdays.includes(isoWeekday)) {
+      if (!workdays.includes(now.isoWeekday)) {
         continue; // heute kein Arbeitstag (z.B. Sa/So) -> keine Erinnerung
       }
 
-      // Wenn heute bereits geloggt: kein Push noetig
-      if (lastLogged === todayBerlin) {
-        continue;
-      }
+      const kind = dueKind(record, now);
+      if (!kind) continue;
 
-      // Payloadless Push senden
+      // Vor dem Senden vermerken — ein Fehlschlag darf keine Wiederholschleife ausloesen
+      const prevSent = record.sent && record.sent.date === now.date ? record.sent : { kinds: [] };
+      record.sent = {
+        date: now.date,
+        kinds: (prevSent.kinds || []).concat([kind]),
+        lastKind: kind,
+        testAt: prevSent.testAt || null,
+      };
+      await env.PUSH_KV.put(kvKey.name, JSON.stringify(record));
+
       try {
-        const alive = await sendPush(subscription, env);
+        const alive = await sendPush(record.subscription, env);
         if (!alive) {
-          // Abo abgelaufen (404/410) -> aufraaeumen
+          // Abo abgelaufen (404/410) -> aufraeumen
           await env.PUSH_KV.delete(kvKey.name);
           cleanedCount++;
           console.log(`Cron: Abgelaufenes Abo geloescht: ${kvKey.name}`);
         } else {
           sentCount++;
+          console.log(`Cron: "${kind}"-Erinnerung gesendet an ${kvKey.name}`);
         }
       } catch (err) {
         // Transiente Fehler: nur loggen, nicht abbrechen
@@ -377,9 +568,12 @@ async function handleScheduled(event, env) {
     }
   } while (cursor);
 
-  console.log(
-    `Cron: Fertig. Versandt: ${sentCount}, abgelaufene Abos geloescht: ${cleanedCount}.`
-  );
+  if (sentCount || cleanedCount) {
+    console.log(
+      `Cron ${now.date} ${Math.floor(now.min / 60)}:${String(now.min % 60).padStart(2, "0")} — ` +
+      `versandt: ${sentCount}, abgelaufene Abos geloescht: ${cleanedCount}.`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -395,3 +589,6 @@ export default {
     ctx.waitUntil(handleScheduled(event, env));
   },
 };
+
+// Fuer Tests exportiert (im Worker-Betrieb ungenutzt)
+export { dueKind, normTimes, hhmmToMin, berlinNow, DEFAULT_TIMES, WINDOW_MIN };
