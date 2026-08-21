@@ -484,6 +484,14 @@
   <p class="hint">Das Soll legt fest, ab wann Mehr- oder Minusstunden entstehen. Voreingestellt: Mo–Do je 7:30 Std, Fr 5:00 Std (= 35:00 Std/Woche).</p>
 
   <div class="divider"></div>
+  <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Feste Pause</label>
+  <div class="row2">
+    <div class="field"><label>Dauer (Minuten)</label><input type="text" id="sBreakMin" inputmode="numeric" placeholder="30" style="font-family:var(--mono)"></div>
+    <div class="field"><label>Beginn</label><input type="time" id="sBreakStart"></div>
+  </div>
+  <p class="hint">Wird beim Stempeln des Feierabends automatisch eingetragen. Passt sie nicht in einen kurzen Tag, rutscht sie in die Tagesmitte. <strong>0 Minuten</strong> = keine feste Pause. Eine abweichende Pause lässt sich jederzeit im Tag ändern.</p>
+
+  <div class="divider"></div>
   <div class="field">
     <label>Urlaubsanspruch pro Jahr</label>
     <input type="text" id="sUrlaub" inputmode="numeric" placeholder="30" style="font-family:var(--mono)">
@@ -513,7 +521,6 @@
 
     <div class="sollgrid">
       <div class="field"><label>Arbeitsbeginn</label><input type="time" id="rStart"></div>
-      <div class="field"><label>Pause</label><input type="time" id="rPause"></div>
       <div class="field"><label>Feierabend Mo–Do</label><input type="time" id="rEnd"></div>
       <div class="field"><label>Feierabend Fr</label><input type="time" id="rEndFri"></div>
       <div class="field"><label>Tagescheck</label><input type="time" id="rDay"></div>
@@ -597,8 +604,10 @@ function defaultState(){
       showWeekend:true,
       showTotalSaldo:true,
       // Erinnerungszeiten; leerer Wert = dieser Anlass ist abgeschaltet
+      // Feste Pause: wird beim Feierabend automatisch abgezogen (min:0 = keine)
+      fixedBreak:{min:30,start:"12:30"},
       // endFri leer = die Feierabend-Zeit gilt auch freitags
-      reminders:{start:"07:45",pause:"12:35",end:"15:45",endFri:"",day:"20:00"}
+      reminders:{start:"07:45",pause:"",end:"15:45",endFri:"",day:"20:00"}
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -623,8 +632,10 @@ function migrate(s){
   // Additiv: showTotalSaldo-Default sicherstellen (true wenn fehlt — Gesamt-Zelle sichtbar)
   if(typeof s.settings.showTotalSaldo !== "boolean") s.settings.showTotalSaldo = true;
   // Additiv: Erinnerungszeiten (fehlende Anlaesse bekommen die Voreinstellung)
-  s.settings.reminders = Object.assign({start:"07:45",pause:"12:35",end:"15:45",endFri:"",day:"20:00"},
+  s.settings.reminders = Object.assign({start:"07:45",pause:"",end:"15:45",endFri:"",day:"20:00"},
                                         s.settings.reminders || {});
+  // Additiv: feste Pause (Bestandsnutzer bekommen die Voreinstellung 30 Min ab 12:30)
+  s.settings.fixedBreak = Object.assign({min:30,start:"12:30"}, s.settings.fixedBreak || {});
   s.entries = s.entries || {};
   // Additiv: bestehende Eintraege ohne type bekommen type:"work"
   for(const key of Object.keys(s.entries)){
@@ -932,7 +943,28 @@ function stampState(e){
   return "working";
 }
 
-// Bisher gearbeitete Minuten am laufenden Tag (laufende Pause wird abgezogen)
+// Einstellungen der festen Pause: {dur (Minuten), pref (Beginn in Minuten|null)}
+function fixedBreakCfg(){
+  const fb=state.settings.fixedBreak || {};
+  const dur=Math.max(0, parseInt(fb.min,10) || 0);
+  return {dur:dur, pref:toMin(fb.start)};
+}
+
+// Lage der festen Pause fuer einen fertigen Arbeitstag.
+// Bevorzugt die eingestellte Uhrzeit; passt sie nicht in den Tag (kurzer
+// Freitag), wird die Pause mittig gelegt. Null, wenn keine Pause moeglich ist.
+function fixedBreakFor(startHHMM, endHHMM){
+  const {dur, pref} = fixedBreakCfg();
+  if(dur<=0) return null;
+  const s=toMin(startHHMM), e=toMin(endHHMM);
+  if(s==null || e==null || e-s<=dur) return null;   // Tag zu kurz fuer die Pause
+  if(pref!=null && pref>=s && pref+dur<=e) return {bStart:fmtHHMM(pref), bEnd:fmtHHMM(pref+dur)};
+  const mid=Math.round((s+e-dur)/2);
+  return {bStart:fmtHHMM(mid), bEnd:fmtHHMM(mid+dur)};
+}
+
+// Bisher gearbeitete Minuten am laufenden Tag. Ist keine Pause erfasst, wird
+// die feste Pause anteilig abgezogen, sobald ihre Uhrzeit erreicht ist.
 function workedSoFar(e){
   const s=toMin(e.start); if(s==null) return 0;
   const now=minNow();
@@ -940,6 +972,10 @@ function workedSoFar(e){
   const bs=toMin(e.bStart), be=toMin(e.bEnd);
   if(bs!=null && be!=null) net-=(be-bs);
   else if(bs!=null) net-=Math.max(0, now-bs);
+  else {
+    const {dur, pref} = fixedBreakCfg();
+    if(dur>0 && pref!=null && now>pref) net-=Math.min(dur, now-pref);
+  }
   return Math.max(0,net);
 }
 
@@ -986,10 +1022,13 @@ function renderToday(){
          '<button class="stamp-edit" data-act="edit">Zeiten von Hand eintragen</button>';
   } else if(st==="working"){
     const hadBreak=!!(e.bStart && e.bEnd);
+    const fbDur=fixedBreakCfg().dur;
+    let pauseInfo='';
+    if(hadBreak) pauseInfo=' · Pause '+e.bStart+'–'+e.bEnd;
+    else if(fbDur>0) pauseInfo=' · abzüglich '+fbDur+' Min Pause';
     body='<div class="stamp-state"><span class="big">'+fmtDur(workedSoFar(e))+'<small>Std</small></span>'+
-         '<span class="sub">seit '+e.start+(hadBreak?' · Pause '+e.bStart+'–'+e.bEnd:'')+'</span></div>'+
+         '<span class="sub">seit '+e.start+pauseInfo+'</span></div>'+
          '<div class="stamp-btns">'+
-           (hadBreak?'':'<button class="sbtn soft" data-act="break"><span class="ico">⏸</span>PAUSE</button>')+
            '<button class="sbtn stop" data-act="end"><span class="ico">⏹</span>FEIERABEND</button>'+
          '</div>'+
          '<button class="stamp-edit" data-act="edit">Zeiten korrigieren</button>';
@@ -1085,6 +1124,11 @@ function stampNow(kind){
       return;
     }
     e.end=now;
+    // Feste Pause automatisch eintragen, wenn fuer heute noch keine erfasst ist
+    if(!(e.bStart && e.bEnd)){
+      const fb=fixedBreakFor(e.start, e.end);
+      if(fb){ e.bStart=fb.bStart; e.bEnd=fb.bEnd; }
+    }
     toast("Feierabend "+now+" · "+fmtDur(netMin(e))+" Std");
   }
 
@@ -1235,9 +1279,13 @@ function openSettings(){
     f.innerHTML='<label>'+name+'</label><input type="time" data-soll="'+k+'" value="'+fmtHHMM(min)+'">';
     g.appendChild(f);
   }
+  // Feste Pause in die Felder schreiben
+  const fbSet=state.settings.fixedBreak || {};
+  if($("sBreakMin"))   $("sBreakMin").value   = (parseInt(fbSet.min,10) || 0);
+  if($("sBreakStart")) $("sBreakStart").value = fbSet.start || "";
   // Erinnerungszeiten in die Felder schreiben
   const rem = state.settings.reminders || {};
-  const REM_FIELDS = {rStart:"start", rPause:"pause", rEnd:"end", rEndFri:"endFri", rDay:"day"};
+  const REM_FIELDS = {rStart:"start", rEnd:"end", rEndFri:"endFri", rDay:"day"};
   for(const id in REM_FIELDS){ const el=$(id); if(el) el.value = rem[REM_FIELDS[id]] || ""; }
   // Wochenend-Toggle initialisieren
   const showWE = state.settings.showWeekend !== false;
@@ -1283,10 +1331,16 @@ $("saveSet").onclick=()=>{
   // Gesamt-Überstunden-Einstellung speichern
   const totToggle=$("totalToggle");
   state.settings.showTotalSaldo = totToggle ? totToggle.checked : true;
+  // Feste Pause speichern
+  const bMin=parseInt($("sBreakMin") ? $("sBreakMin").value : "", 10);
+  state.settings.fixedBreak = {
+    min: (isNaN(bMin) || bMin<0) ? 0 : bMin,
+    start: $("sBreakStart") ? $("sBreakStart").value : ""
+  };
   // Erinnerungszeiten speichern (leeres Feld = Anlass aus)
   state.settings.reminders = {
     start: $("rStart") ? $("rStart").value : "",
-    pause: $("rPause") ? $("rPause").value : "",
+    pause: "",   // Pause wird nicht mehr gestempelt (feste Pause)
     end:   $("rEnd")   ? $("rEnd").value   : "",
     endFri:$("rEndFri")? $("rEndFri").value: "",
     day:   $("rDay")   ? $("rDay").value   : ""
@@ -1652,7 +1706,9 @@ function currentWorkdays() {
 // Eingestellte Erinnerungszeiten
 function currentTimes() {
   const r = state.settings.reminders || {};
-  return { start: r.start || "", pause: r.pause || "", end: r.end || "",
+  // Bei fester Pause gibt es nichts zu stempeln — also auch nichts zu erinnern
+  const pause = (fixedBreakCfg().dur > 0) ? "" : (r.pause || "");
+  return { start: r.start || "", pause: pause, end: r.end || "",
            endFri: r.endFri || "", day: r.day || "" };
 }
 
@@ -1738,11 +1794,15 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 5;
+  const APP_VERSION = 6;
   const WHATS_NEW = [
+    { v: 6, items: [
+      "Nur noch zwei Tipps am Tag: Kommen und Feierabend",
+      "Die 30-Minuten-Pause wird automatisch abgezogen (Dauer und Beginn in den Einstellungen)"
+    ]},
     { v: 5, items: [
-      "Stempeln mit einem Tipp: Kommen, Pause, Feierabend — oben auf der Startseite",
-      "Erinnerung zum Arbeitsbeginn, zur Pause und zum Feierabend (Zeiten in den Einstellungen)",
+      "Stempeln mit einem Tipp — oben auf der Startseite",
+      "Erinnerung zum Arbeitsbeginn und zum Feierabend (Zeiten in den Einstellungen)",
       "Hinweis, wenn an einem früheren Tag das Ende fehlt",
       "App-Symbol gedrückt halten: Kommen oder Feierabend direkt stempeln",
       "Eigene Feierabend-Erinnerung für Freitag (Einstellungen)"

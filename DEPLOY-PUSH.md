@@ -182,13 +182,16 @@ GitHub Pages deployt automatisch. Nach ca. einer Minute ist die Aenderung live.
    | Feld | Voreinstellung | Meldet sich, wenn … |
    |---|---|---|
    | Arbeitsbeginn | 07:45 | bis dahin kein Beginn gestempelt wurde |
-   | Pause | 12:35 | gestempelt wurde, aber noch keine Pause erfasst ist |
    | Feierabend Mo–Do | 15:45 | der Dienst laeuft, aber kein Ende erfasst ist |
    | Feierabend Fr | *(leer)* | dasselbe, aber nur freitags — **leer heisst: die Mo–Do-Zeit gilt auch freitags** |
    | Tagescheck | 20:00 | fuer den Tag noch gar nichts erfasst ist |
 
    Der kurze Freitag braucht meist eine eigene Zeit: wer Mo–Do vorarbeitet und
    freitags frueher geht, wuerde sonst erst lange nach dem Heimweg erinnert.
+
+   Eine **Pausen-Erinnerung gibt es nicht mehr**: die Pause wird nicht gestempelt,
+   sondern als feste Dauer abgezogen (Einstellungen → *Feste Pause*, Voreinstellung
+   30 Min ab 12:30). Der Client meldet dem Worker deshalb dauerhaft `times.pause = ""`.
 
    Ein **leeres Feld schaltet die jeweilige Erinnerung ab** (Ausnahme
    *Feierabend Fr*, siehe oben). Erinnert wird nur

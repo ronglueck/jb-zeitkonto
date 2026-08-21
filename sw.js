@@ -127,11 +127,14 @@ const REMINDERS = {
   }
 };
 
-/** Notbehelf, wenn der Anlass nicht erfragt werden konnte. */
+/**
+ * Notbehelf, wenn der Anlass nicht erfragt werden konnte.
+ * Die Pause wird nicht mehr gestempelt (feste Pause), taucht hier also
+ * nicht auf — REMINDERS.pause bleibt nur fuer alte Serverdaten stehen.
+ */
 function kindFromClock() {
   const h = new Date().getHours();
   if (h < 11) return "start";
-  if (h < 14) return "pause";
   if (h < 18) return "end";
   return "day";
 }
