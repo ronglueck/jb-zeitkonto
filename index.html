@@ -138,6 +138,7 @@
   .daytimes{flex:1;min-width:0}
   .times{font-size:13.5px;color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty{font-size:13px;color:var(--faint)}
+  .times .open{color:var(--muted);font-family:var(--sans);font-size:12.5px;font-style:italic}
   .note{font-size:11.5px;color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dayright{flex:0 0 auto;text-align:right}
   .net{font-size:14px;font-weight:700;font-family:var(--mono)}
@@ -677,6 +678,11 @@ function netMin(e){
 // Hilfsfunktion: ist ein Eintrag ein Arbeitstag?
 function isWork(e){ return !e || !e.type || e.type === "work"; }
 
+// Angefangener Arbeitstag: gestempelt, aber noch nicht abgeschlossen.
+// Solange das Ende fehlt, ist die Tagesbilanz unbekannt — sie darf weder
+// als 0:00 Ist noch als volles Soll-Minus in die Summen einfliessen.
+function isOpenDay(e){ return !!e && isWork(e) && !(e.start && e.end); }
+
 // Saldo eines Tages = Ist − Soll (nur wenn Tag erfasst ist)
 // Arbeit: Ist=netMin, Saldo=netMin-soll / Nicht-Arbeit: Ist=soll, Saldo=0
 function dayDiff(dateObj, e){
@@ -753,6 +759,7 @@ function aggregate(keys){
   for(const key of keys){
     const e=state.entries[key];
     if(!e) continue;
+    if(isOpenDay(e)) continue;   // laeuft noch — zaehlt erst nach dem Feierabend
     const d=parseYmd(key);
     ist += dayIst(d,e);
     saldo += dayDiff(d,e);
@@ -888,7 +895,14 @@ function renderDay(d,key,viewMonth,todayKey){
     mid='<div class="empty">Noch nicht erfasst – tippen zum Eintragen</div>';
   } else if(work){
     // Arbeitstag mit Eintrag
-    if(e.start||e.end){
+    if(isOpenDay(e)){
+      // Angefangen, aber nicht abgeschlossen: kein Saldo, sondern ein Hinweis
+      const heute = (key===todayKey);
+      mid='<div class="times">'+ (e.start||"–") +' – <span class="open">'+
+            (heute ? 'läuft' : 'Ende fehlt') +'</span></div>'+
+          (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
+      right='<div class="diff '+(heute?'zero':'neg')+'">'+(heute?'—':'!')+'</div>';
+    } else if(e.start||e.end){
       const pause = (e.bStart&&e.bEnd) ? '  ('+'−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)' : '';
       mid='<div class="times">'+ (e.start||"–") +' – '+ (e.end||"–") + pause +'</div>'+
           (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
@@ -1441,6 +1455,13 @@ function buildReport(){
       sollStr=soll>0?fmtDur(soll):'&mdash;';
       saldoStr='&mdash;';
       rowSaldoCls='muted';
+    } else if(isOpenDay(e)){
+      // Angefangener Tag: ohne Ende gibt es keine Bilanz — wie in den Summen
+      eintragCell='<td>'+(e.start||'&ndash;')+' &ndash; ?</td>';
+      istStr='&mdash;';
+      sollStr=soll>0?fmtDur(soll):'&mdash;';
+      saldoStr='&mdash;';
+      rowSaldoCls='muted';
     } else if(isWork(e)){
       // Arbeitstag
       let eintragText;
@@ -1798,7 +1819,8 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
   const WHATS_NEW = [
     { v: 6, items: [
       "Nur noch zwei Tipps am Tag: Kommen und Feierabend",
-      "Die 30-Minuten-Pause wird automatisch abgezogen (Dauer und Beginn in den Einstellungen)"
+      "Die 30-Minuten-Pause wird automatisch abgezogen (Dauer und Beginn in den Einstellungen)",
+      "Der laufende Tag verfälscht die Wochen- und Monatssumme nicht mehr"
     ]},
     { v: 5, items: [
       "Stempeln mit einem Tipp — oben auf der Startseite",
