@@ -14,3 +14,7 @@ worker/node_modules/
 VERFAHRENSDOKUMENTATION.md
 Zeitkonto-Praesentation.pdf
 tools/make-presentation.py
+
+# Tests – lokale Abhaengigkeiten und Ausgaben
+tests/node_modules/
+tests/output/

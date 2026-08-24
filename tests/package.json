@@ -1,0 +1,12 @@
+{
+  "name": "zeitkonto-tests",
+  "private": true,
+  "type": "commonjs",
+  "description": "Browsergestuetzte Tests fuer die Zeitkonto-PWA",
+  "scripts": {
+    "test": "node run-all.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.0"
+  }
+}
