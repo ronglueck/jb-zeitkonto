@@ -8,7 +8,8 @@
  *   GET  /             -> 200 "Zeitkonto Push OK" (Health-Check)
  *   POST /subscribe    -> Abo speichern
  *   POST /heartbeat    -> Tagesstatus + Erinnerungszeiten aktualisieren
- *   POST /pending      -> welcher Anlass zuletzt gesendet wurde (fuer den Service Worker)
+ *   POST /pending      -> welcher Anlass heute zuletzt gesendet wurde und ob der Tag
+ *                         schon erfasst ist (fuer den Service Worker)
  *   POST /testpush     -> Sofort-Push zum Pruefen der Zustellung
  *   POST /unsubscribe  -> Abo loeschen
  *
@@ -61,6 +62,29 @@ const WINDOW_MIN = 30;
 
 /** Mindestabstand zwischen zwei Test-Benachrichtigungen (Missbrauchsbremse). */
 const TEST_COOLDOWN_MS = 60 * 1000;
+
+/**
+ * Lebensdauer einer Erinnerung in Sekunden (Push-Header "TTL").
+ *
+ * Kann das Geraet den Push nicht sofort annehmen (Energiesparmodus, kein Netz),
+ * haelt der Push-Dienst ihn so lange vor. Eine Erinnerung, die ihren Moment
+ * verpasst hat, richtet spaeter aber nur Schaden an — sie soll dann lieber
+ * verfallen. Frueher stand hier pauschal 86400 (24 h); eine Feierabend-
+ * Erinnerung wurde dadurch am naechsten Tag zugestellt.
+ */
+const TTL_BY_KIND = {
+  start: 45 * 60,      // der Arbeitsbeginn ist danach ohnehin vorbei
+  pause: 45 * 60,
+  end:   90 * 60,      // Feierabend: etwas mehr Luft fuer den Heimweg
+  day:   3 * 3600,     // Tagescheck 20 Uhr — bis zum spaeten Abend sinnvoll
+  test:  5 * 60        // Diagnose: entweder gleich oder gar nicht
+};
+const TTL_FALLBACK = 45 * 60;
+
+/** Lebensdauer fuer einen Anlass, mit Rueckfallwert. */
+function ttlForKind(kind) {
+  return TTL_BY_KIND[kind] || TTL_FALLBACK;
+}
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktionen
@@ -162,6 +186,21 @@ function berlinNow() {
   // Mittag-UTC vermeidet Zeitzonen-Raender bei der Wochentagsberechnung
   const isoWeekday = ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) + 1;
   return { date, min: h * 60 + m, isoWeekday };
+}
+
+/**
+ * Auskunft fuer den Service Worker beim Eintreffen eines Push.
+ *   kind  — der heute zuletzt ausgeloeste Anlass, sonst null
+ *   done  — der Tag ist bereits vollstaendig erfasst
+ * Beides zusammen erlaubt es dem Service Worker, eine ueberholte Meldung als
+ * solche zu zeigen, statt einen Anlass zu erfinden.
+ */
+function pendingInfo(record, now) {
+  const aktuell = !!(record.sent && record.sent.date === now.date);
+  return {
+    kind: aktuell ? (record.sent.lastKind || null) : null,
+    done: record.lastLogged === now.date
+  };
 }
 
 /**
@@ -283,8 +322,9 @@ async function buildVapidAuthorization(audience, env) {
  * Sendet eine payloadlose Web-Push-Benachrichtigung an ein Abo.
  * Gibt true bei Erfolg zurueck; false bei 404/410 (abgelaufenes Abo).
  * Wirft bei anderen HTTP-Fehlern (damit der Caller entscheiden kann).
+ * "kind" steuert nur die Lebensdauer — der Push selbst bleibt payloadlos.
  */
-async function sendPush(subscription, env) {
+async function sendPush(subscription, env, kind) {
   const endpointUrl = new URL(subscription.endpoint);
   const audience = endpointUrl.origin; // z.B. "https://fcm.googleapis.com"
 
@@ -294,7 +334,7 @@ async function sendPush(subscription, env) {
     method: "POST",
     headers: {
       Authorization: authorization,
-      TTL: "86400",
+      TTL: String(ttlForKind(kind)),
       Urgency: "normal",
       // Kein Content-Type, kein Body (payloadless)
     },
@@ -444,12 +484,10 @@ async function handleFetch(request, env) {
 
     const key = "s:" + (await sha256hex(endpoint));
     const raw = await env.PUSH_KV.get(key);
-    if (!raw) return jsonResponse({ ok: true, kind: null }, 200, env);
+    if (!raw) return jsonResponse({ ok: true, kind: null, done: false }, 200, env);
 
-    const record = JSON.parse(raw);
-    const now = berlinNow();
-    const kind = record.sent && record.sent.date === now.date ? record.sent.lastKind || null : null;
-    return jsonResponse({ ok: true, kind }, 200, env);
+    const info = pendingInfo(JSON.parse(raw), berlinNow());
+    return jsonResponse({ ok: true, kind: info.kind, done: info.done }, 200, env);
   }
 
   // ---------- POST /testpush ----------
@@ -487,7 +525,7 @@ async function handleFetch(request, env) {
     await env.PUSH_KV.put(key, JSON.stringify(record));
 
     try {
-      const alive = await sendPush(record.subscription, env);
+      const alive = await sendPush(record.subscription, env, "test");
       if (!alive) {
         await env.PUSH_KV.delete(key);
         return jsonResponse({ ok: false, error: "Abo abgelaufen" }, 410, env);
@@ -572,7 +610,7 @@ async function handleScheduled(event, env) {
       await env.PUSH_KV.put(kvKey.name, JSON.stringify(record));
 
       try {
-        const alive = await sendPush(record.subscription, env);
+        const alive = await sendPush(record.subscription, env, kind);
         if (!alive) {
           // Abo abgelaufen (404/410) -> aufraeumen
           await env.PUSH_KV.delete(kvKey.name);
@@ -612,4 +650,5 @@ export default {
 };
 
 // Fuer Tests exportiert (im Worker-Betrieb ungenutzt)
-export { dueKind, normTimes, hhmmToMin, berlinNow, timeForKind, DEFAULT_TIMES, WINDOW_MIN };
+export { dueKind, normTimes, hhmmToMin, berlinNow, timeForKind, pendingInfo, ttlForKind,
+         DEFAULT_TIMES, WINDOW_MIN, TTL_BY_KIND };

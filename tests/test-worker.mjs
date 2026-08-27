@@ -1,5 +1,6 @@
 /* Unit-Tests der Erinnerungslogik im Push-Worker */
-import { dueKind, normTimes, hhmmToMin, timeForKind, DEFAULT_TIMES, WINDOW_MIN }
+import { dueKind, normTimes, hhmmToMin, timeForKind, pendingInfo, ttlForKind,
+         DEFAULT_TIMES, WINDOW_MIN, TTL_BY_KIND }
   from "../worker/worker.js";
 
 let pass = 0, fail = 0;
@@ -118,6 +119,43 @@ console.log("\nI) Eigener Feierabend am Freitag");
     normTimes({ start: "07:45", pause: "", end: "15:45", endFri: "12:10", day: "" }).endFri === "12:10");
   check("normTimes verwirft unsinniges endFri",
     normTimes({ start: "07:45", pause: "", end: "15:45", endFri: "99:99", day: "" }).endFri === "");
+}
+
+console.log("\nJ) Lebensdauer der Erinnerungen (TTL)");
+{
+  check("Feierabend hält 90 Minuten", ttlForKind("end") === 90 * 60, ttlForKind("end"));
+  check("Arbeitsbeginn hält 45 Minuten", ttlForKind("start") === 45 * 60);
+  check("Tagescheck hält 3 Stunden", ttlForKind("day") === 3 * 3600);
+  check("Test verfällt nach 5 Minuten", ttlForKind("test") === 5 * 60);
+  check("unbekannter Anlass bekommt den Rückfallwert", ttlForKind("quatsch") === 45 * 60);
+  // Der eigentliche Punkt: keine Erinnerung überlebt bis zum nächsten Tag
+  const laengste = Math.max(...Object.values(TTL_BY_KIND));
+  check("nichts hält länger als 3 Stunden (früher 24 h)", laengste <= 3 * 3600, laengste);
+}
+
+console.log("\nK) Auskunft an den Service Worker (/pending)");
+{
+  const heute = { date: TODAY, min: 900, isoWeekday: 4 };
+
+  check("heute verschickt -> Anlass wird genannt",
+    pendingInfo(rec({ sent: { date: TODAY, kinds: ["end"], lastKind: "end" } }), heute).kind === "end");
+  check("Versand von gestern -> kein Anlass (nicht raten!)",
+    pendingInfo(rec({ sent: { date: "2026-08-19", kinds: ["end"], lastKind: "end" } }), heute).kind === null);
+  check("noch nie verschickt -> kein Anlass",
+    pendingInfo(rec(), heute).kind === null);
+  check("Tag vollständig erfasst -> done",
+    pendingInfo(rec({ lastLogged: TODAY }), heute).done === true);
+  check("Tag noch offen -> nicht done",
+    pendingInfo(rec(), heute).done === false);
+  check("gestern erfasst zählt heute nicht",
+    pendingInfo(rec({ lastLogged: "2026-08-19" }), heute).done === false);
+
+  // Genau der Fall vom 27.08.: Erinnerung von gestern trifft heute ein,
+  // während der Tag längst erfasst ist
+  const spaetzuender = pendingInfo(
+    rec({ lastLogged: TODAY, sent: { date: "2026-08-19", kinds: ["end"], lastKind: "end" } }), heute);
+  check("verspätete Meldung: kein Anlass und Tag erledigt",
+    spaetzuender.kind === null && spaetzuender.done === true, spaetzuender);
 }
 
 console.log("\n===== " + pass + " bestanden, " + fail + " fehlgeschlagen =====");

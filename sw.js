@@ -124,43 +124,55 @@ const REMINDERS = {
     title: "Zeitkonto",
     body: "✅ Test – die Erinnerungen kommen auf diesem Gerät an.",
     actions: [{ action: "open", title: "App öffnen" }]
+  },
+  // Der Tag ist laengst erfasst — die Meldung kommt verspaetet
+  done: {
+    title: "Zeitkonto",
+    body: "Für heute ist schon alles erfasst.",
+    actions: [{ action: "open", title: "App öffnen" }]
+  },
+  // Anlass nicht mehr zuzuordnen (verspaetet zugestellt oder Abfrage misslungen).
+  // Bewusst ohne Aufforderung: lieber nichts behaupten als das Falsche.
+  unbekannt: {
+    title: "Zeitkonto",
+    body: "Erinnerung – bitte bei Gelegenheit die Zeiten prüfen.",
+    actions: [{ action: "open", title: "App öffnen" }]
   }
 };
 
 /**
- * Notbehelf, wenn der Anlass nicht erfragt werden konnte.
- * Die Pause wird nicht mehr gestempelt (feste Pause), taucht hier also
- * nicht auf — REMINDERS.pause bleibt nur fuer alte Serverdaten stehen.
+ * Fragt den Worker, welche Erinnerung gerade ausgeloest wurde.
+ *
+ * Frueher wurde der Anlass notfalls aus der Uhrzeit geraten. Das ging schief,
+ * sobald ein Push verspaetet ankam: Eine Feierabend-Erinnerung vom Vortag
+ * wurde am naechsten Nachmittag als "Arbeitsende fehlt" angezeigt, waehrend
+ * laengst gestempelt war. Jetzt wird nicht mehr geraten — ohne belastbare
+ * Auskunft erscheint eine neutrale Meldung.
  */
-function kindFromClock() {
-  const h = new Date().getHours();
-  if (h < 11) return "start";
-  if (h < 18) return "end";
-  return "day";
-}
-
-/** Fragt den Worker, welche Erinnerung gerade ausgeloest wurde. */
 async function currentKind() {
   try {
     const sub = await self.registration.pushManager.getSubscription();
-    if (!sub) return kindFromClock();
+    if (!sub) return "unbekannt";
     const resp = await fetch(PUSH_WORKER_URL + "/pending", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: sub.endpoint })
     });
-    if (!resp.ok) return kindFromClock();
+    if (!resp.ok) return "unbekannt";
     const data = await resp.json();
-    return (data && data.kind && REMINDERS[data.kind]) ? data.kind : kindFromClock();
+    if (!data) return "unbekannt";
+    if (data.done) return "done";                                  // Tag schon erfasst
+    if (data.kind && REMINDERS[data.kind]) return data.kind;
+    return "unbekannt";
   } catch (e) {
-    return kindFromClock();
+    return "unbekannt";
   }
 }
 
 self.addEventListener("push", event => {
   event.waitUntil((async () => {
     const kind = await currentKind();
-    const r = REMINDERS[kind] || REMINDERS.day;
+    const r = REMINDERS[kind] || REMINDERS.unbekannt;
     await self.registration.showNotification(r.title, {
       body: r.body,
       icon: "./icons/icon-192.png",

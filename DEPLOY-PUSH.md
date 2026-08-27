@@ -346,6 +346,7 @@ Datensatz (`POST /unsubscribe`).
 |---|---|
 | Geraet war offline beim Stempeln | Der Heartbeat geht verloren; die Erinnerung kommt trotzdem, obwohl schon gestempelt wurde. Beim naechsten Oeffnen der App wird der Status nachgemeldet. Nachtraeglich wird nichts wiederholt. |
 | Android schraenkt Hintergrunddienste ein | Push kann verzoegert sein oder ausbleiben. Siehe [Abschnitt 10](#10-android-16--samsung-wenn-keine-meldung-ankommt). |
+| Push wird verspaetet zugestellt | Jede Erinnerung hat eine begrenzte Lebensdauer (`TTL_BY_KIND`: Beginn 45 Min, Feierabend 90 Min, Tagescheck 3 Std). Was liegen bleibt, verfaellt beim Push-Dienst, statt am naechsten Tag aufzutauchen. Kommt eine Meldung trotzdem verspaetet an, fragt der Service Worker `/pending`; ist der Anlass nicht mehr aktuell oder der Tag laengst erfasst, erscheint ein neutraler Text statt einer falschen Aufforderung. |
 | Mehrere Geraete | Jedes Geraet hat ein eigenes Abo mit eigenem Status. Wird auf Geraet A gestempelt, erinnert Geraet B trotzdem, bis dort die App geoeffnet wird. |
 | Subscription laeuft ab | Der Worker loescht abgelaufene Eintraege automatisch (HTTP 404/410). Schalter in den Einstellungen aus/ein legt ein neues Abo an. |
 | Anlass wird nicht abgefragt | Der Push kommt ohne Text; der Service Worker fragt `POST /pending`, worum es geht. Faellt das aus (kein Netz im SW), leitet er den Anlass aus der Uhrzeit ab — der Text kann dann unpassend sein, die Aktions-Knoepfe stempeln aber weiterhin korrekt. |
