@@ -608,7 +608,7 @@ function defaultState(){
       // Feste Pause: wird beim Feierabend automatisch abgezogen (min:0 = keine)
       fixedBreak:{min:30,start:"12:30"},
       // endFri leer = die Feierabend-Zeit gilt auch freitags
-      reminders:{start:"07:45",pause:"",end:"15:45",endFri:"",day:"20:00"}
+      reminders:{start:"07:45",pause:"",end:"15:45",endFri:"13:15",day:"20:00"}
     },
     entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
   };
@@ -633,8 +633,15 @@ function migrate(s){
   // Additiv: showTotalSaldo-Default sicherstellen (true wenn fehlt — Gesamt-Zelle sichtbar)
   if(typeof s.settings.showTotalSaldo !== "boolean") s.settings.showTotalSaldo = true;
   // Additiv: Erinnerungszeiten (fehlende Anlaesse bekommen die Voreinstellung)
-  s.settings.reminders = Object.assign({start:"07:45",pause:"",end:"15:45",endFri:"",day:"20:00"},
+  s.settings.reminders = Object.assign({start:"07:45",pause:"",end:"15:45",endFri:"13:15",day:"20:00"},
                                         s.settings.reminders || {});
+  // Einmalig: der kurze Freitag hatte bis v6 keine eigene Erinnerungszeit und lief
+  // deshalb auf der Mo-Do-Zeit mit. Der Marker sorgt dafuer, dass ein spaeter
+  // bewusst geleertes Feld leer bleibt und hier nicht wieder gefuellt wird.
+  if(!s.settings.friReminderInit){
+    s.settings.friReminderInit = true;
+    if(!s.settings.reminders.endFri) s.settings.reminders.endFri = "13:15";
+  }
   // Additiv: feste Pause (Bestandsnutzer bekommen die Voreinstellung 30 Min ab 12:30)
   s.settings.fixedBreak = Object.assign({min:30,start:"12:30"}, s.settings.fixedBreak || {});
   s.entries = s.entries || {};
@@ -1815,8 +1822,11 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 6;
+  const APP_VERSION = 7;
   const WHATS_NEW = [
+    { v: 7, items: [
+      "Freitags erinnert die App jetzt um 13:15 statt erst um 15:45 (Einstellungen)"
+    ]},
     { v: 6, items: [
       "Nur noch zwei Tipps am Tag: Kommen und Feierabend",
       "Die 30-Minuten-Pause wird automatisch abgezogen (Dauer und Beginn in den Einstellungen)",

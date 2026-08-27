@@ -219,7 +219,7 @@ const readSettings = page => page.evaluate(() => JSON.parse(localStorage.getItem
     await page.click("#settingsBtn");
     await page.waitForTimeout(250);
     check("Feld für Freitag vorhanden", await page.isVisible("#rEndFri"));
-    check("Freitagsfeld ist leer voreingestellt", await page.inputValue("#rEndFri") === "",
+    check("Freitagsfeld ist mit 13:15 vorbelegt", await page.inputValue("#rEndFri") === "13:15",
       await page.inputValue("#rEndFri"));
     check("Mo–Do-Feld beschriftet", (await page.textContent("#pushSection")).includes("Feierabend Mo"));
     await page.fill("#rEndFri", "12:10");
@@ -273,6 +273,73 @@ const readSettings = page => page.evaluate(() => JSON.parse(localStorage.getItem
     await page.waitForTimeout(250);
     const v = await page.inputValue("#fStart");
     check("ohne Historie: eingebauter Standard", v === "07:30" || v === "", v);
+    await ctx.close();
+  }
+
+  // ---------- 20) Freitags-Feierabend wird einmalig nachgetragen ----------
+  console.log("\n20) Freitagszeit für Bestandsdaten");
+  {
+    // Bestand aus v6: reminders vorhanden, endFri leer, kein Marker
+    const alt = {
+      settings: {
+        employer: "Muster GmbH",
+        soll: { 1: 420, 2: 420, 3: 420, 4: 420, 5: 420, 6: 0, 7: 0 },
+        urlaubsanspruch: 30,
+        reminders: { start: "07:45", pause: "", end: "15:45", endFri: "", day: "20:00" }
+      },
+      entries: {}
+    };
+    const { ctx, page, calls } = await openApp(browser, { rawState: alt, push: { enabled: true, endpoint: ENDPOINT } });
+    const st = await page.evaluate(() => state.settings);
+    check("leeres Freitagsfeld wird auf 13:15 gesetzt", st.reminders.endFri === "13:15", st.reminders);
+    check("Marker gesetzt", st.friReminderInit === true, st.friReminderInit);
+    check("Mo–Do-Zeit unverändert", st.reminders.end === "15:45", st.reminders);
+    await page.waitForTimeout(300);
+    const hb = calls.filter(c => c.url.endsWith("/heartbeat"))[0];
+    check("Heartbeat meldet 13:15", hb && hb.body.times.endFri === "13:15", hb && hb.body.times);
+    await ctx.close();
+  }
+  {
+    // Wer die Freitagszeit bewusst leert, soll sie leer behalten
+    const bewusst = {
+      settings: {
+        employer: "Muster GmbH",
+        soll: { 1: 420, 2: 420, 3: 420, 4: 420, 5: 420, 6: 0, 7: 0 },
+        urlaubsanspruch: 30,
+        friReminderInit: true,
+        reminders: { start: "07:45", pause: "", end: "15:45", endFri: "", day: "20:00" }
+      },
+      entries: {}
+    };
+    const { ctx, page } = await openApp(browser, { rawState: bewusst });
+    const st = await page.evaluate(() => state.settings);
+    check("bewusst geleertes Feld bleibt leer", st.reminders.endFri === "", st.reminders);
+    await ctx.close();
+  }
+  {
+    // Eine eigene Zeit wird nie überschrieben
+    const eigene = {
+      settings: {
+        employer: "Muster GmbH",
+        soll: { 1: 420, 2: 420, 3: 420, 4: 420, 5: 420, 6: 0, 7: 0 },
+        urlaubsanspruch: 30,
+        reminders: { start: "07:45", pause: "", end: "15:45", endFri: "11:40", day: "20:00" }
+      },
+      entries: {}
+    };
+    const { ctx, page } = await openApp(browser, { rawState: eigene });
+    const st = await page.evaluate(() => state.settings);
+    check("vorhandene Freitagszeit bleibt erhalten", st.reminders.endFri === "11:40", st.reminders);
+    await ctx.close();
+  }
+  {
+    // Frische Installation
+    const { ctx, page } = await openApp(browser, { rawState: { settings: {}, entries: {} } });
+    const st = await page.evaluate(() => state.settings);
+    check("Neuinstallation bekommt 13:15", st.reminders.endFri === "13:15", st.reminders);
+    await page.click("#settingsBtn");
+    await page.waitForTimeout(250);
+    check("Feld zeigt 13:15", await page.inputValue("#rEndFri") === "13:15", await page.inputValue("#rEndFri"));
     await ctx.close();
   }
 

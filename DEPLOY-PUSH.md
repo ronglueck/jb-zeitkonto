@@ -183,7 +183,7 @@ GitHub Pages deployt automatisch. Nach ca. einer Minute ist die Aenderung live.
    |---|---|---|
    | Arbeitsbeginn | 07:45 | bis dahin kein Beginn gestempelt wurde |
    | Feierabend Mo–Do | 15:45 | der Dienst laeuft, aber kein Ende erfasst ist |
-   | Feierabend Fr | *(leer)* | dasselbe, aber nur freitags — **leer heisst: die Mo–Do-Zeit gilt auch freitags** |
+   | Feierabend Fr | 13:15 | dasselbe, aber nur freitags — **leer heisst: die Mo–Do-Zeit gilt auch freitags** |
    | Tagescheck | 20:00 | fuer den Tag noch gar nichts erfasst ist |
 
    Der kurze Freitag braucht meist eine eigene Zeit: wer Mo–Do vorarbeitet und
