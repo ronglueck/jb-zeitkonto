@@ -216,6 +216,15 @@
   .preview .sep{width:1px;background:var(--line)}
 
   .actions{display:flex;gap:10px;margin-top:4px}
+  .field input[aria-invalid="true"]{border:2px solid var(--minus);background:var(--minus-soft)}
+  .day-feedback{border-radius:10px;padding:12px;margin:0 0 12px;font-size:13px;line-height:1.5}
+  .day-feedback.error{background:var(--minus-soft);color:var(--minus)}
+  .day-feedback.warning{background:#fdf6e3;color:#705510}
+  .day-feedback p{margin:0}
+  .day-feedback .actions{flex-wrap:wrap;margin-top:10px}
+  #breakDecision[hidden]{display:none}
+  .day-feedback .btn{font-size:13px;min-height:44px;padding:10px}
+  #daySheet > .actions .btn{min-width:0;padding:12px 8px;font-size:14px}
   .btn{
     flex:1;appearance:none;border:0;border-radius:12px;padding:14px;
     font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);
@@ -464,6 +473,13 @@
     <div class="p"><div class="k">Saldo</div><div class="v" id="pDiff">0:00</div></div>
   </div>
 
+  <div id="dayFeedback" class="day-feedback" role="status" aria-live="polite" hidden>
+    <p id="dayFeedbackText"></p>
+    <div id="breakDecision" class="actions" hidden>
+      <button class="btn primary" id="applyFixedBreak" type="button">Pause übernehmen</button>
+      <button class="btn ghost" id="saveWithoutBreak" type="button">Ohne Pause speichern</button>
+    </div>
+  </div>
   <div class="actions">
     <button class="btn danger" id="delDay">Löschen</button>
     <button class="btn ghost" id="cancelDay">Abbrechen</button>
@@ -1210,6 +1226,7 @@ function activeType(){
 
 function openDay(key, overrides){
   editKey=key;
+  dayValidationStarted=false;
   const d=parseYmd(key);
   const e=Object.assign({}, state.entries[key] || defaultEntryFor(d), overrides||{});
   $("dayTitle").textContent = DOW_LONG[d.getDay()];
@@ -1228,7 +1245,32 @@ function currentEntry(){
   }
   return {type:"work",start:$("fStart").value,end:$("fEnd").value,bStart:$("fBStart").value,bEnd:$("fBEnd").value,note:$("fNote").value.trim()};
 }
+let dayValidationStarted=false;
+const DAY_TIME_FIELDS=["fStart","fEnd","fBStart","fBEnd"];
+function dayEntryError(e){
+  if(!isWork(e)) return null;
+  if(!e.start || !e.end) return {message:"Bitte Beginn und Ende eintragen.",fields:[!e.start&&"fStart",!e.end&&"fEnd"].filter(Boolean)};
+  if(toMin(e.end)<=toMin(e.start)) return {message:"Das Arbeitsende muss nach dem Beginn liegen.",fields:["fStart","fEnd"]};
+  if((e.bStart&&!e.bEnd)||(!e.bStart&&e.bEnd)) return {message:"Für die Pause bitte Anfang und Ende eintragen.",fields:["fBStart","fBEnd"]};
+  if(e.bStart && e.bEnd){
+    if(toMin(e.bEnd)<=toMin(e.bStart)) return {message:"Das Pausenende muss nach dem Pausenbeginn liegen.",fields:["fBStart","fBEnd"]};
+    if(toMin(e.bStart)<toMin(e.start) || toMin(e.bEnd)>toMin(e.end)) return {message:"Die Pause muss innerhalb der Arbeitszeit liegen.",fields:["fBStart","fBEnd"]};
+  }
+  return null;
+}
+function clearDayFeedback(){
+  $("dayFeedback").hidden=true;
+  $("breakDecision").hidden=true;
+  for(const id of DAY_TIME_FIELDS){ $(id).removeAttribute("aria-invalid"); $(id).removeAttribute("aria-describedby"); }
+}
+function showDayFeedback(message, kind, fields=[]){
+  $("dayFeedbackText").textContent=message;
+  $("dayFeedback").className="day-feedback "+kind;
+  $("dayFeedback").hidden=false;
+  for(const id of fields){ $(id).setAttribute("aria-invalid","true"); $(id).setAttribute("aria-describedby","dayFeedbackText"); }
+}
 function updatePreview(){
+  clearDayFeedback();
   const d=parseYmd(editKey);
   const type=activeType();
   const soll=sollMin(d);
@@ -1237,6 +1279,13 @@ function updatePreview(){
     ist=soll; diff=0;
   } else {
     const e=currentEntry();
+    const error=dayEntryError(e);
+    if(error){
+      if(dayValidationStarted) showDayFeedback(error.message,"error",error.fields);
+      $("pIst").textContent="—"; $("pSoll").textContent=fmtDur(soll);
+      $("pDiff").textContent="—"; $("pDiff").className="v";
+      return;
+    }
     ist=netMin(e); diff=ist-soll;
   }
   $("pIst").textContent=fmtDur(ist);
@@ -1244,7 +1293,7 @@ function updatePreview(){
   const pd=$("pDiff"); pd.textContent=fmtSigned(diff);
   pd.className="v "+diffClass(diff);
 }
-["fStart","fEnd","fBStart","fBEnd"].forEach(id=>$(id).addEventListener("input",updatePreview));
+DAY_TIME_FIELDS.forEach(id=>$(id).addEventListener("input",()=>{dayValidationStarted=true;updatePreview();}));
 $("clearBreak").onclick=()=>{ $("fBStart").value=""; $("fBEnd").value=""; updatePreview(); };
 
 // Tagestyp-Segment: Klick-Handler
@@ -1254,23 +1303,38 @@ $("typeSeg").addEventListener("click", ev=>{
   setTypeSegment(btn.getAttribute("data-type"));
 });
 
-$("saveDay").onclick=()=>{
+function saveDayEntry(allowNoBreak=false){
   const e=currentEntry();
-  if(!isWork(e)){
-    // Kein Arbeitstag: keine Zeitvalidierung
-    state.entries[editKey]=e; saveState(); hideSheets(); render(); toast("Gespeichert");
-    pushHeartbeat(); // auch markierte Tage (Urlaub/Krank/Feiertag) gelten als erfasst
+  dayValidationStarted=true;
+  updatePreview();
+  const error=dayEntryError(e);
+  if(error){ $(error.fields[0]).focus(); return; }
+  const suggested=isWork(e) && !e.bStart && !e.bEnd ? fixedBreakFor(e.start,e.end) : null;
+  if(suggested && !allowNoBreak){
+    const duration=toMin(suggested.bEnd)-toMin(suggested.bStart);
+    showDayFeedback("Es ist keine Pause eingetragen. Üblich sind "+duration+" Minuten. Vorschlag: "+suggested.bStart+"–"+suggested.bEnd+". Bitte prüfen.","warning");
+    $("applyFixedBreak").textContent=duration+" Min Pause übernehmen";
+    $("breakDecision").hidden=false;
     return;
   }
-  // Arbeitstag: bisherige Validierung unveraendert
-  if(!e.start || !e.end){ toast("Bitte Beginn und Ende eintragen"); return; }
-  if(toMin(e.end) <= toMin(e.start)){ toast("Ende muss nach dem Beginn liegen"); return; }
-  if((e.bStart&&!e.bEnd)||(!e.bStart&&e.bEnd)){ toast("Pause braucht Anfang und Ende"); return; }
-  state.entries[editKey]=e; saveState(); hideSheets(); render(); toast("Gespeichert");
-  pushHeartbeat(); // fire-and-forget nach erfolgreichem Tag-Speichern
+  const previous=state.entries[editKey];
+  const d=parseYmd(editKey), saldo=dayDiff(d,e);
+  let message="Gespeichert · Tages-Saldo "+fmtSigned(saldo);
+  if(previous && !isOpenDay(previous)) message+=" · Änderung "+fmtSigned(saldo-dayDiff(d,previous));
+  state.entries[editKey]=e; saveState(); hideSheets(); render(); toast(message);
+  pushHeartbeat();
+}
+$("saveDay").onclick=()=>saveDayEntry();
+$("applyFixedBreak").onclick=()=>{
+  const e=currentEntry(), fb=fixedBreakFor(e.start,e.end);
+  if(!fb || dayEntryError(e)) return;
+  $("fBStart").value=fb.bStart; $("fBEnd").value=fb.bEnd;
+  updatePreview();
+  showDayFeedback("Pause "+fb.bStart+"–"+fb.bEnd+" übernommen. Bitte prüfen und speichern.","warning");
 };
+$("saveWithoutBreak").onclick=()=>saveDayEntry(true);
 $("delDay").onclick=()=>{
-  if(state.entries[editKey]){ delete state.entries[editKey]; saveState(); hideSheets(); render(); toast("Gelöscht"); }
+  if(state.entries[editKey]){ delete state.entries[editKey]; saveState(); hideSheets(); render(); toast("Gelöscht"); pushHeartbeat(); }
 };
 $("cancelDay").onclick=hideSheets;
 
@@ -1373,6 +1437,7 @@ $("saveSet").onclick=()=>{
 $("resetBtn").onclick=()=>{
   if(confirm("Wirklich ALLE erfassten Zeiten und Einstellungen löschen?")){
     state=defaultState(); saveState(); hideSheets(); render(); toast("Zurückgesetzt");
+    pushHeartbeat();
   }
 };
 
@@ -1394,6 +1459,7 @@ $("importFile").onchange=(ev)=>{
       const data=migrate(JSON.parse(r.result));
       if(!data.entries||typeof data.entries!=="object") throw 0;
       state=data; saveState(); render(); hideSheets(); toast("Sicherung geladen");
+      pushHeartbeat();
     }catch(e){ toast("Datei konnte nicht gelesen werden"); }
   };
   r.readAsText(file); ev.target.value="";
@@ -1661,6 +1727,8 @@ function initPushUI() {
 /* ---- Subscribe ---- */
 
 async function pushSubscribe() {
+  const previous=loadPushState();
+  let sub=null;
   try {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       toast("Push wird von diesem Browser nicht unterstuetzt");
@@ -1674,26 +1742,44 @@ async function pushSubscribe() {
       return;
     }
     const reg = await navigator.serviceWorker.ready;
-    // Vorhandenes Abo verwerfen (z. B. nach VAPID-Key-Wechsel), sonst wirft subscribe()
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) { try { await existing.unsubscribe(); } catch (e) {} }
-    const sub = await reg.pushManager.subscribe({
+    // Nur Abos mit dem aktuellen VAPID-Schluessel weiterverwenden.
+    const applicationServerKey=urlBase64ToUint8Array(PUSH_CONFIG.vapidPublicKey);
+    sub=await reg.pushManager.getSubscription();
+    if(sub){
+      const oldKey=new Uint8Array(sub.options?.applicationServerKey || []);
+      const sameKey=oldKey.length===applicationServerKey.length && oldKey.every((v,i)=>v===applicationServerKey[i]);
+      if(!sameKey){
+        if(!await sub.unsubscribe()) throw new Error("Altes Abo konnte nicht beendet werden");
+        sub=null;
+      }
+    }
+    sub = sub || await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(PUSH_CONFIG.vapidPublicKey)
+      applicationServerKey
     });
-    // fire-and-forget
-    fetch(PUSH_CONFIG.workerUrl + "/subscribe", {
+    const status=todayStatus();
+    const resp=await fetch(PUSH_CONFIG.workerUrl + "/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub.toJSON(), workdays: currentWorkdays(), times: currentTimes() })
-    }).catch(() => {});
+      body: JSON.stringify({ subscription: sub.toJSON(), workdays: currentWorkdays(), times: currentTimes(),
+        date:ymd(new Date()), logged:status.hasStart && status.hasEnd, status })
+    });
+    if(!resp.ok || !(await resp.json()).ok) throw new Error("Server-Anmeldung fehlgeschlagen");
     const ps = { enabled: true, endpoint: sub.endpoint };
     savePushState(ps);
     updateToggleVisual(true);
     toast("Erinnerung aktiviert");
   } catch (e) {
-    toast("Erinnerung konnte nicht aktiviert werden");
-    updateToggleVisual(false);
+    // Der Server kann gespeichert haben, auch wenn seine Antwort verloren ging.
+    // Ein solches Abo wirklich stornieren; bei unklarer Stornierung den Endpoint
+    // behalten, damit Statusmeldungen und ein erneutes Ausschalten moeglich sind.
+    let cancelled=!sub;
+    if(sub){ try { cancelled=await sub.unsubscribe(); } catch (_) { cancelled=false; } }
+    const ps=sub && !cancelled ? {enabled:true,endpoint:sub.endpoint,registrationUnconfirmed:true}
+      : (!sub && previous.enabled ? previous : {enabled:false,endpoint:null});
+    savePushState(ps);
+    updateToggleVisual(ps.enabled);
+    toast(ps.enabled ? "Erinnerungsstatus unklar – bitte aus- und wieder einschalten" : "Erinnerung konnte nicht aktiviert werden");
   }
 }
 
@@ -1822,8 +1908,14 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 7;
+  const APP_VERSION = 8;
   const WHATS_NEW = [
+    { v: 8, items: [
+      "Ungültige Zeiten und Pausen werden im Tageseditor rot markiert und erklärt",
+      "Fehlt die Pause, könnt ihr die üblichen 30 Minuten übernehmen oder bewusst ohne Pause speichern",
+      "Nach einer Korrektur zeigt die App die Änderung des Tages-Saldos",
+      "Zuverlässigere Aktivierung und Aktualisierung der Erinnerungen"
+    ]},
     { v: 7, items: [
       "Freitags erinnert die App jetzt um 13:15 statt erst um 15:45 (Einstellungen)"
     ]},

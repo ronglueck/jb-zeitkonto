@@ -10,6 +10,7 @@ const http = require("http");
 
 const BASE = "http://localhost:8123/index.html";
 const SUITES = [
+  ["test-corrections.js", "Korrekturen, Pausenpruefung und Push-Anmeldung"],
   ["test-openday.js", "Laufender Tag & Summen"],
   ["test-stamp.js", "Stempeluhr"],
   ["test-fixedbreak.js", "Feste Pause"],

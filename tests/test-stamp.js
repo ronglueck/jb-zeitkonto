@@ -173,6 +173,9 @@ const readEntry = (page, k) => page.evaluate(kk => JSON.parse(localStorage.getIt
     check("Beginn des Vortags geladen", await page.inputValue("#fStart") === "07:30");
     await page.fill("#fEnd", "15:30");
     await page.click("#saveDay");
+    check("Fehlende Pause wird vor dem Nachtrag angeboten", await page.isVisible("#applyFixedBreak"));
+    await page.click("#applyFixedBreak");
+    await page.click("#saveDay");
     await page.waitForTimeout(200);
     check("Banner nach Nachtrag verschwunden", !(await page.isVisible(".openday")));
     await ctx.close();

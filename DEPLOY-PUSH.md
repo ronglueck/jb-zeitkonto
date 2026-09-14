@@ -176,7 +176,9 @@ GitHub Pages deployt automatisch. Nach ca. einer Minute ist die Aenderung live.
 3. Abschnitt **Erinnerungen** → Schalter **Erinnerungen auf dieses Geraet**
    einschalten.
 4. Browser fragt nach Benachrichtigungs-Erlaubnis → **Zulassen** tippen.
-5. Kurze Bestaetigung erscheint (Toast). Der Schalter bleibt aktiv.
+5. Erst nach erfolgreicher Anmeldung beim Server erscheint die Bestaetigung (Toast).
+   Der heutige Status wird dabei mitgeschickt. Bei einem Netzwerk- oder Serverfehler
+   bleibt die Erinnerung ausgeschaltet und kann erneut aktiviert werden.
 6. Darunter die vier Uhrzeiten pruefen und ggf. anpassen:
 
    | Feld | Voreinstellung | Meldet sich, wenn … |

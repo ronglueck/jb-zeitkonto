@@ -38,6 +38,9 @@ Frameworks, keine Tracker. Eine Datei, ein Browser, fertig.
 - Stempeluhr für heute: *Kommen* → *Feierabend*, minutengenau, ohne Rundung
 - Feste Pause (Dauer und Uhrzeit einstellbar), wird beim Feierabend automatisch abgezogen
 - Jeden Tag von Hand korrigierbar: Beginn, Ende, Pause, Notiz
+- Der Tageseditor markiert ungültige Zeiten rot und verhindert das Speichern.
+  Bei fehlender Pause lässt sich die eingestellte Dauer übernehmen oder ausdrücklich
+  ohne Pause speichern. Nach einer Korrektur wird die Änderung des Tages-Saldos angezeigt.
 - Tagestypen **Urlaub**, **Krank**, **Feiertag** — saldo-neutral, mit Jahres-Zähler
 - Hinweis, wenn an einem früheren Tag das Ende fehlt
 - Startbildschirm-Verknüpfungen: App-Symbol gedrückt halten → *Kommen* / *Feierabend*

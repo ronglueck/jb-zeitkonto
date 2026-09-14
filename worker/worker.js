@@ -415,10 +415,10 @@ async function handleFetch(request, env) {
     const key = "s:" + (await sha256hex(subscription.endpoint));
     const record = {
       subscription,
-      lastLogged: null,
+      lastLogged: body?.logged === true ? (body?.date || null) : null,
       workdays: normWorkdays(body?.workdays),
       times: normTimes(body?.times) || { ...DEFAULT_TIMES },
-      status: null,
+      status: normStatus(body?.status, body?.date),
       sent: null,
     };
     await env.PUSH_KV.put(key, JSON.stringify(record));
@@ -459,6 +459,10 @@ async function handleFetch(request, env) {
       // Alte Clients ohne logged-Flag: vorhandenes date impliziert "erfasst".
       if (date && (logged === true || logged === undefined)) {
         record.lastLogged = date;
+      } else if (date && logged === false && record.lastLogged === date) {
+        // Ein geloeschter/zurueckgesetzter Tag ist wieder offen. Einen anderen
+        // abgeschlossenen Tag durch verspätete Statusmeldungen nicht entfernen.
+        record.lastLogged = null;
       }
       await env.PUSH_KV.put(key, JSON.stringify(record));
     }
