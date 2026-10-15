@@ -247,11 +247,14 @@
   .typeseg button.active-urlaub{background:var(--brand-soft);color:var(--brand);border-color:var(--brand)}
   .typeseg button.active-krank{background:var(--minus-soft);color:var(--minus);border-color:var(--minus)}
   .typeseg button.active-feiertag{background:#fdf6e3;color:#9a7a1a;border-color:var(--accent)}
+  .typeseg button[data-type="abbau"]{grid-column:1 / -1}
+  .typeseg button.active-abbau{background:#eef1f5;color:var(--ink);border-color:var(--muted)}
   /* Badge-Varianten fuer Tageszeilen */
   .badge.urlaub{background:var(--brand-soft);color:var(--brand)}
   .badge.krank{background:var(--minus-soft);color:var(--minus)}
   .badge.feiertag{background:#fdf6e3;color:#9a7a1a}
-  .badge.urlaub,.badge.krank,.badge.feiertag{font-family:var(--sans)}
+  .badge.abbau{background:#eef1f5;color:var(--ink)}
+  .badge.urlaub,.badge.krank,.badge.feiertag,.badge.abbau{font-family:var(--sans)}
   /* Nicht-Arbeit Hinweisbox im Editor */
   .nonwork-hint{
     background:var(--card);border:1px solid var(--line);border-radius:11px;
@@ -446,6 +449,7 @@
     <button data-type="urlaub"    >Urlaub</button>
     <button data-type="krank"     >Krank</button>
     <button data-type="feiertag"  >Feiertag</button>
+    <button data-type="abbau"     >Überstundenabbau</button>
   </div>
 
   <div id="nonworkHint" class="nonwork-hint"></div>
@@ -543,7 +547,11 @@
       <div class="field"><label>Tagescheck</label><input type="time" id="rDay"></div>
     </div>
     <p class="hint">Ein leeres Feld schaltet die jeweilige Erinnerung ab — nur <em>Feierabend&nbsp;Fr</em> nicht: bleibt es leer, gilt freitags die Mo–Do-Zeit. Der Tagescheck meldet sich nur, wenn für den Tag noch gar nichts erfasst ist.</p>
-    <button class="btn ghost" id="testPushBtn" style="width:100%">Test-Benachrichtigung senden</button>
+    <button class="btn ghost" id="testLocalBtn" style="width:100%" type="button">Anzeige auf diesem Gerät testen</button>
+    <p class="hint">Zeigt eine Testmeldung direkt auf diesem Gerät, ohne Serverversand. Benachrichtigungen müssen bereits erlaubt sein.</p>
+    <button class="btn ghost" id="testPushBtn" style="width:100%" type="button">Test über Server senden</button>
+    <p class="hint">Prüft den Versandweg. Erst eine sichtbare Benachrichtigung bestätigt den Empfang.</p>
+    <p class="hint" id="pushTestResult" role="status" aria-live="polite" hidden></p>
   </div>
   <!-- === Ende Erinnerung === -->
 
@@ -626,7 +634,7 @@ function defaultState(){
       // endFri leer = die Feierabend-Zeit gilt auch freitags
       reminders:{start:"07:45",pause:"",end:"15:45",endFri:"13:15",day:"20:00"}
     },
-    entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag",note}
+    entries:{} // "YYYY-MM-DD": Arbeit {type:"work",start,bStart,bEnd,end,note} · frei {type:"urlaub"|"krank"|"feiertag"|"abbau",note}
   };
 }
 function loadState(){
@@ -707,15 +715,17 @@ function isWork(e){ return !e || !e.type || e.type === "work"; }
 function isOpenDay(e){ return !!e && isWork(e) && !(e.start && e.end); }
 
 // Saldo eines Tages = Ist − Soll (nur wenn Tag erfasst ist)
-// Arbeit: Ist=netMin, Saldo=netMin-soll / Nicht-Arbeit: Ist=soll, Saldo=0
+// Arbeit: Ist=netMin / Abbau: Ist=0, Saldo=-soll / sonst frei: Ist=soll, Saldo=0
 function dayDiff(dateObj, e){
   if(!e) return 0;
   if(isWork(e)) return netMin(e) - sollMin(dateObj);
+  if(e.type==="abbau") return 0 - sollMin(dateObj);
   return 0;
 }
 function dayIst(dateObj, e){
   if(!e) return 0;
   if(isWork(e)) return netMin(e);
+  if(e.type==="abbau") return 0;
   return sollMin(dateObj);
 }
 
@@ -937,15 +947,16 @@ function renderDay(d,key,viewMonth,todayKey){
     }
   } else {
     // Nicht-Arbeit-Typ
-    const typeLabel = e.type==="urlaub"?"Urlaub":(e.type==="krank"?"Krank":"Feiertag");
-    const badgeCls  = e.type; // "urlaub"|"krank"|"feiertag"
-    const gutMin    = sollMin(d);
+    const typeLabel = TYPE_LABEL[e.type] || "Feiertag";
+    const badgeCls  = e.type;
+    const gutMin    = dayIst(d,e);
+    const diff      = dayDiff(d,e);
     mid='<div><span class="badge '+badgeCls+'">'+typeLabel+'</span>'+
         (gutMin>0?' <span class="net tabnum" style="font-size:12px;color:var(--muted)">+'+fmtDur(gutMin)+'</span>':'')+
         '</div>'+
         (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
     right='<div class="net tabnum">'+fmtDur(gutMin)+'</div>'+
-          '<div class="diff zero">+0:00</div>';
+          '<div class="diff '+diffClass(diff)+'">'+fmtSigned(diff)+'</div>';
   }
 
   row.innerHTML=
@@ -964,7 +975,7 @@ function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
    entries[key] = {type:"work", start, bStart, bEnd, end, note}
    Es wird nicht gerundet — gestempelt wird die exakte Minute.
 ============================================================ */
-const TYPE_LABEL = {urlaub:"Urlaub", krank:"Krank", feiertag:"Feiertag"};
+const TYPE_LABEL = {urlaub:"Urlaub", krank:"Krank", feiertag:"Feiertag", abbau:"Überstundenabbau"};
 const STAMP_KINDS = ["start","break","resume","end"];
 
 // Jetzt-Uhrzeit als "HH:MM" bzw. Minuten seit Mitternacht
@@ -1043,8 +1054,11 @@ function renderToday(){
   let label="Heute", body;
 
   if(st==="nonwork"){
+    const balanceText=e.type==="abbau"
+      ? fmtDur(sollMin(d))+' Std Überstundenabbau · Saldo '+fmtSigned(dayDiff(d,e))
+      : fmtDur(sollMin(d))+' Std gutgeschrieben · Saldo 0:00';
     body='<div class="stamp-state">Eingetragen als <strong>'+TYPE_LABEL[e.type]+'</strong>'+
-         '<span class="sub">'+fmtDur(sollMin(d))+' Std gutgeschrieben · Saldo 0:00</span></div>'+
+         '<span class="sub">'+balanceText+'</span></div>'+
          '<div class="stamp-done"><div class="sum"></div>'+
          '<button class="sbtn soft small" data-act="edit">Ändern</button></div>';
   } else if(st==="idle" && sollMin(d)===0){
@@ -1212,7 +1226,9 @@ function setTypeSegment(type){
   if(!isW){
     const d=parseYmd(editKey);
     hint.style.display="block";
-    hint.textContent="Zählt als Soll "+fmtDur(sollMin(d))+" Std · Saldo 0:00";
+    hint.textContent=type==="abbau"
+      ? "Ganzer Tag frei · "+fmtDur(sollMin(d))+" Std werden vom Zeitguthaben abgezogen · Saldo "+fmtSigned(dayDiff(d,{type}))
+      : "Zählt als Soll "+fmtDur(sollMin(d))+" Std · Saldo 0:00";
   } else {
     hint.style.display="none";
   }
@@ -1276,7 +1292,7 @@ function updatePreview(){
   const soll=sollMin(d);
   let ist, diff;
   if(!isWork({type})){
-    ist=soll; diff=0;
+    ist=dayIst(d,{type}); diff=dayDiff(d,{type});
   } else {
     const e=currentEntry();
     const error=dayEntryError(e);
@@ -1554,13 +1570,14 @@ function buildReport(){
       saldoStr=fmtSigned(diff);
       rowSaldoCls=diffClass(diff);
     } else {
-      // Urlaub / Krank / Feiertag
-      const label=e.type==="urlaub"?"Urlaub":(e.type==="krank"?"Krank":"Feiertag");
+      // Abwesenheit: Abbau zieht das Soll ab, die anderen Typen sind neutral.
+      const label=TYPE_LABEL[e.type] || "Feiertag";
+      const diff=dayDiff(d,e);
       eintragCell='<td>'+label+'</td>';
-      istStr=fmtDur(soll);
+      istStr=fmtDur(dayIst(d,e));
       sollStr=fmtDur(soll);
-      saldoStr='0:00';
-      rowSaldoCls='zero';
+      saldoStr=e.type==="abbau"?fmtSigned(diff):'0:00';
+      rowSaldoCls=diffClass(diff);
     }
 
     const datumStr=pad(d.getDate())+'.'+pad(d.getMonth()+1)+'. '+DOW_SHORT[d.getDay()];
@@ -1722,6 +1739,8 @@ function initPushUI() {
 
   const testBtn = document.getElementById("testPushBtn");
   if (testBtn) testBtn.addEventListener("click", pushTest);
+  const localBtn = document.getElementById("testLocalBtn");
+  if (localBtn) localBtn.addEventListener("click", testLocalNotification);
 }
 
 /* ---- Subscribe ---- */
@@ -1830,7 +1849,7 @@ function currentTimes() {
 function todayStatus() {
   const e = state.entries[ymd(new Date())];
   if (!e) return { hasStart: false, hasBreak: false, hasEnd: false };
-  // Urlaub/Krank/Feiertag: der Tag ist fertig, nichts steht mehr aus
+  // Auch Überstundenabbau: der Tag ist fertig, nichts steht mehr aus.
   if (!isWork(e)) return { hasStart: true, hasBreak: true, hasEnd: true };
   return {
     hasStart: !!e.start,
@@ -1866,13 +1885,60 @@ function pushHeartbeat() {
 
 /* ---- Test-Benachrichtigung (Diagnose auf dem Geraet) ---- */
 
+function pushTestFeedback(message) {
+  const result = document.getElementById("pushTestResult");
+  if (result) {
+    result.textContent = message;
+    result.hidden = false;
+  }
+  toast(message);
+}
+
+async function testLocalNotification() {
+  const button = document.getElementById("testLocalBtn");
+  if (button) button.disabled = true;
+  try {
+    if (typeof Notification === "undefined" || !("serviceWorker" in navigator)) {
+      pushTestFeedback("Dieser Browser unterstützt keine Benachrichtigungen. Auf dem iPhone Zeitkonto über den Home-Bildschirm öffnen (ab iOS 16.4).");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      pushTestFeedback("Benachrichtigungen sind blockiert. Bitte in den Geräte- und Browser-Einstellungen für Zeitkonto erlauben.");
+      return;
+    }
+    if (Notification.permission !== "granted") {
+      pushTestFeedback("Bitte zuerst Erinnerungen einschalten und Benachrichtigungen erlauben. Danach den Anzeigetest erneut starten.");
+      return;
+    }
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg || !reg.active) {
+      pushTestFeedback("Die App ist noch nicht bereit. Bitte neu laden oder schließen und neu öffnen, dann erneut testen.");
+      return;
+    }
+    await reg.showNotification("Zeitkonto – Anzeigetest", {
+      body: "Lokaler Test: Die Benachrichtigungsanzeige auf diesem Gerät funktioniert.",
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-192.png",
+      tag: "zeitkonto-local-test",
+      renotify: true,
+      actions: [{ action: "open", title: "App öffnen" }],
+      data: { kind: "local-test" }
+    });
+    pushTestFeedback("Anzeigetest ausgelöst. Bitte die Benachrichtigungsleiste prüfen. Fehlt die Meldung, die Mitteilungseinstellungen für Zeitkonto und den Browser prüfen.");
+  } catch (e) {
+    pushTestFeedback("Die Testmeldung konnte nicht angezeigt werden. Bitte die Mitteilungseinstellungen für Zeitkonto und den Browser prüfen und erneut testen.");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function pushTest() {
   const ps = loadPushState();
   if (!ps.enabled || !ps.endpoint) {
-    toast("Erinnerungen zuerst einschalten");
+    pushTestFeedback("Erinnerungen zuerst einschalten");
     return;
   }
-  toast("Test wird gesendet …");
+  pushTestFeedback("Test wird gesendet …");
   try {
     const resp = await fetch(PUSH_CONFIG.workerUrl + "/testpush", {
       method: "POST",
@@ -1880,16 +1946,16 @@ async function pushTest() {
       body: JSON.stringify({ endpoint: ps.endpoint })
     });
     if (resp.ok) {
-      toast("Gesendet — die Meldung kommt gleich");
+      pushTestFeedback("An Push-Dienst übergeben. Bitte die Benachrichtigungsleiste prüfen; die Anzeige auf dem Gerät ist noch nicht bestätigt.");
     } else if (resp.status === 429) {
-      toast("Bitte eine Minute warten");
+      pushTestFeedback("Bitte eine Minute warten und den Servertest dann erneut starten. Es wird kein Test automatisch nachgesendet.");
     } else if (resp.status === 410 || resp.status === 404) {
-      toast("Abo abgelaufen — Erinnerung aus- und wieder einschalten");
+      pushTestFeedback("Abo abgelaufen — Erinnerung aus- und wieder einschalten");
     } else {
-      toast("Test fehlgeschlagen (Fehler " + resp.status + ")");
+      pushTestFeedback("Test fehlgeschlagen (Fehler " + resp.status + ")");
     }
   } catch (e) {
-    toast("Kein Netz — Test nicht möglich");
+    pushTestFeedback("Kein Netz — Test nicht möglich");
   }
 }
 
@@ -1908,8 +1974,16 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 8;
+  const APP_VERSION = 10;
   const WHATS_NEW = [
+    { v: 10, items: [
+      "Erinnerungen bleiben bei einer hängenden Textabfrage nicht mehr aus: Nach fünf Sekunden erscheint eine allgemeine Meldung",
+      "Zwei Tests in den Einstellungen unterscheiden die Anzeige auf dem Gerät vom Versand über den Server; das Ergebnis bleibt lesbar"
+    ]},
+    { v: 9, items: [
+      "Neuer Tagestyp Überstundenabbau: Ein ganzer freier Tag zieht die Sollstunden vom Zeitguthaben ab",
+      "Überstundenabbau ist in der Übersicht und im Monatsbericht erkennbar und verbraucht keinen Urlaub"
+    ]},
     { v: 8, items: [
       "Ungültige Zeiten und Pausen werden im Tageseditor rot markiert und erklärt",
       "Fehlt die Pause, könnt ihr die üblichen 30 Minuten übernehmen oder bewusst ohne Pause speichern",

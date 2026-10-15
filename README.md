@@ -42,6 +42,10 @@ Frameworks, keine Tracker. Eine Datei, ein Browser, fertig.
   Bei fehlender Pause lässt sich die eingestellte Dauer übernehmen oder ausdrücklich
   ohne Pause speichern. Nach einer Korrektur wird die Änderung des Tages-Saldos angezeigt.
 - Tagestypen **Urlaub**, **Krank**, **Feiertag** — saldo-neutral, mit Jahres-Zähler
+- Tagestyp **Überstundenabbau** für einen ganzen freien Tag: Datum antippen,
+  Überstundenabbau wählen und speichern. Ist 0:00, das Tages-Soll wird vom
+  Zeitguthaben abgezogen (z. B. donnerstags 7:30, freitags 5:00 Stunden bei den
+  Voreinstellungen). Verbraucht keinen Urlaub; erscheint auch im Monatsbericht.
 - Hinweis, wenn an einem früheren Tag das Ende fehlt
 - Startbildschirm-Verknüpfungen: App-Symbol gedrückt halten → *Kommen* / *Feierabend*
 
@@ -56,6 +60,10 @@ Frameworks, keine Tracker. Eine Datei, ein Browser, fertig.
   eigene Feierabend-Zeit für Freitag
 - Erinnert **nur, wenn der Eintrag wirklich noch fehlt**, und nur an Arbeitstagen
 - Die Benachrichtigung hat einen Knopf, der direkt stempelt
+- Zwei Diagnoseknöpfe in den Einstellungen: **Anzeige auf diesem Gerät testen**
+  prüft die lokale Anzeige; **Test über Server senden** prüft den Versandweg.
+  Ergebnisse bleiben lesbar. Hängt die Abfrage des Meldungstextes, zeigt die App
+  nach fünf Sekunden eine allgemeine Erinnerung.
 
 **Drumherum**
 - Läuft **offline** (Service Worker), installierbar als App
@@ -99,7 +107,8 @@ Update-Hinweis —, die bewusst nichts voneinander wissen müssen.
 
 Der **Rechenkern** ist klein genug, um ihn ganz zu verstehen: Netto-Arbeitszeit ist
 `(Ende − Beginn) − Pause`, der Tagessaldo ist `Ist − Soll`. Urlaubs-, Krankheits- und
-Feiertage werden mit dem Soll gutgeschrieben und sind damit saldo-neutral. Tage ohne
+Feiertage werden mit dem Soll gutgeschrieben und sind damit saldo-neutral.
+Überstundenabbau zählt als Ist 0:00 und zieht das Tages-Soll vom Guthaben ab. Tage ohne
 Eintrag zählen gar nicht mit — ein vergessener Tag erzeugt also kein Minus, ein
 angefangener Tag ebenso wenig, solange das Ende fehlt.
 
@@ -120,7 +129,7 @@ Browser sie nicht wegräumt.
   "entries": {
     "2026-08-20": { "type": "work", "start": "07:04", "bStart": "12:30",
                     "bEnd": "13:00", "end": "15:23", "note": "" }
-    // oder: { "type": "urlaub" | "krank" | "feiertag", "note": "" }
+    // oder: { "type": "urlaub" | "krank" | "feiertag" | "abbau", "note": "" }
   }
 }
 ```

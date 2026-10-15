@@ -80,12 +80,13 @@ self.addEventListener("fetch", event => {
    PUSH-ERINNERUNG — additiv (install/activate/fetch unveraendert)
 
    Der Push kommt ohne Payload an. Worum es geht, fragt der Service
-   Worker beim Worker nach (/pending); faellt das aus, wird der Anlass
-   aus der Uhrzeit abgeleitet.
+   Worker beim Server nach (/pending). Bei einem Fehler oder nach
+   fuenf Sekunden erscheint eine neutrale Erinnerung.
 ============================================================ */
 
 // Muss zu PUSH_CONFIG.workerUrl in index.html passen.
 const PUSH_WORKER_URL = "https://zeitkonto-push.h1n15r15.workers.dev";
+const PENDING_TIMEOUT_MS = 5000;
 
 const REMINDERS = {
   start: {
@@ -150,22 +151,38 @@ const REMINDERS = {
  * Auskunft erscheint eine neutrale Meldung.
  */
 async function currentKind() {
+  const controller = new AbortController();
+  let timer;
   try {
-    const sub = await self.registration.pushManager.getSubscription();
-    if (!sub) return "unbekannt";
-    const resp = await fetch(PUSH_WORKER_URL + "/pending", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint })
+    // Auch das Laden des Antworttexts und des Abos begrenzen. Ein reiner
+    // Fetch-Abbruch genuegt nicht, wenn schon die lokale Abo-Abfrage haengt.
+    const lookup = (async () => {
+      const sub = await self.registration.pushManager.getSubscription();
+      if (!sub || controller.signal.aborted) return "unbekannt";
+      const resp = await fetch(PUSH_WORKER_URL + "/pending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+        signal: controller.signal
+      });
+      if (!resp.ok) return "unbekannt";
+      const data = await resp.json();
+      if (!data) return "unbekannt";
+      if (data.done) return "done";
+      if (data.kind && REMINDERS[data.kind]) return data.kind;
+      return "unbekannt";
+    })();
+    const timeout = new Promise(resolve => {
+      timer = setTimeout(() => {
+        resolve("unbekannt");
+        controller.abort();
+      }, PENDING_TIMEOUT_MS);
     });
-    if (!resp.ok) return "unbekannt";
-    const data = await resp.json();
-    if (!data) return "unbekannt";
-    if (data.done) return "done";                                  // Tag schon erfasst
-    if (data.kind && REMINDERS[data.kind]) return data.kind;
-    return "unbekannt";
+    return await Promise.race([lookup, timeout]);
   } catch (e) {
     return "unbekannt";
+  } finally {
+    clearTimeout(timer);
   }
 }
 

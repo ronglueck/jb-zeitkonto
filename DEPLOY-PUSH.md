@@ -199,41 +199,46 @@ GitHub Pages deployt automatisch. Nach ca. einer Minute ist die Aenderung live.
    *Feierabend Fr*, siehe oben). Erinnert wird nur
    an Arbeitstagen (Wochentage mit Soll > 0) und nur, wenn der Schritt wirklich
    noch fehlt — wer morgens stempelt, bekommt mittags keine Beginn-Erinnerung.
-7. **Sofort pruefen:** Knopf **Test-Benachrichtigung senden** tippen. Innerhalb
-   weniger Sekunden muss die Meldung „Test – die Erinnerungen kommen auf diesem
-   Geraet an" erscheinen. Kommt nichts, weiter bei
+7. **Sofort pruefen:** Zuerst **Anzeige auf diesem Gerät testen** tippen. Dieser
+   Test braucht kein Push-Abo und verschickt nichts ueber den Server; die
+   Benachrichtigungs-Erlaubnis muss bereits erteilt sein. Danach **Test über
+   Server senden** pruefen. Erst die sichtbare Benachrichtigung bestaetigt den
+   Empfang. Das Ergebnis beider Tests bleibt unter den Knoepfen stehen. Kommt
+   nichts, weiter bei
    [Abschnitt 10](#10-android-16--samsung-wenn-keine-meldung-ankommt).
 
 ---
 
 ## 9. Test
 
-### Stufe A – Schnell, ohne Server (prueft Berechtigung, SW-Handler und Icon)
+### Stufe A – Anzeige auf dem Geraet, ohne Serverversand
 
-1. App im Chrome auf dem Testgeraet (oder Desktop) oeffnen.
-2. DevTools oeffnen (F12) → Reiter **Application** → **Service Workers**.
-3. Im Feld **Push** einen beliebigen Text eingeben und auf **Push** klicken.
-4. Die Notification muss sofort erscheinen – mit Icon und dem eingegebenen Text.
+1. Zeitkonto auf dem Testgeraet oeffnen, auf dem iPhone ueber den Home-Bildschirm.
+2. Einstellungen → **Anzeige auf diesem Gerät testen** tippen.
+3. Sperrbildschirm und Benachrichtigungsleiste pruefen. Die Meldung heisst
+   „Zeitkonto – Anzeigetest" und beginnt mit „Lokaler Test".
 
-Dieser Test benutzt keinen Cloudflare-Server. Er genuegt, um
-Benachrichtigungs-Berechtigung, Service-Worker-Handler und das Icon zu pruefen.
+Dieser Test benutzt keinen Cloudflare-Server und aendert das Push-Abo nicht.
+Er prueft die lokale Anzeige ueber die registrierte App. Er bestaetigt nicht,
+dass ein Server-Push das Geraet erreicht. Fehlt die Erlaubnis oder ist die App
+noch nicht bereit, erscheint ein Hinweis statt einer Erfolgsmeldung.
 
 ### Stufe B – Echter Server-Push, direkt aus der App
 
-Einstellungen → **Test-Benachrichtigung senden**. Der Knopf ruft
+Einstellungen → **Test über Server senden**. Der Knopf ruft
 `POST /testpush` auf dem deploiten Worker auf; der schickt sofort eine echte
 Push-Nachricht an genau dieses Geraet. Das prueft die komplette Kette:
 Abo in der KV, VAPID-Signatur, Zustellung durch Google, Service Worker,
 Anzeige auf dem Sperrbildschirm.
 
-Zwischen zwei Tests liegt eine Minute Sperrzeit (der Worker antwortet sonst
-mit HTTP 429, die App zeigt „Bitte eine Minute warten").
+Zwischen zwei Servertests liegt eine Minute Sperrzeit (HTTP 429). Danach muss
+der Knopf erneut gedrueckt werden; es wird kein Test automatisch nachgesendet.
 
 Moegliche Rueckmeldungen:
 
 | Meldung in der App | Bedeutung |
 |---|---|
-| „Gesendet — die Meldung kommt gleich" | Worker hat den Push angenommen. Kommt trotzdem nichts an: [Abschnitt 10](#10-android-16--samsung-wenn-keine-meldung-ankommt). |
+| „An Push-Dienst übergeben" | Der Versand wurde angenommen, die Anzeige auf dem Geraet ist noch nicht bestaetigt. Kommt trotzdem nichts an: zuerst den direkten Anzeigetest, dann [Abschnitt 10](#10-android-16--samsung-wenn-keine-meldung-ankommt) pruefen. |
 | „Abo abgelaufen — Erinnerung aus- und wieder einschalten" | Google hat das Abo verworfen (HTTP 410). Schalter aus/ein loest das. |
 | „Kein Netz — Test nicht moeglich" | Geraet offline oder Worker nicht erreichbar. |
 | „Erinnerungen zuerst einschalten" | Auf diesem Geraet ist gar kein Abo registriert. |
@@ -271,8 +276,15 @@ Cron-Lauf aus, geht die Erinnerung dadurch nicht verloren.
 
 ## 10. Android 16 / Samsung: wenn keine Meldung ankommt
 
-Die Test-Benachrichtigung (Abschnitt 9, Stufe B) ist der schnellste Weg zur
-Diagnose. Kommt sie nicht an, diese Punkte **in dieser Reihenfolge** pruefen —
+Die beiden Tests aus Abschnitt 9 grenzen den Fehler ein. Fehlt schon die lokale
+Meldung (Stufe A), zuerst Benachrichtigungs-Erlaubnis und Anzeigeeinstellungen
+pruefen. Kommt die lokale Meldung an, aber kein Servertest (Stufe B), liegt der
+Fehler im Versandweg oder in der Verarbeitung des empfangenen Push; eine
+Erfolgsmeldung des Servers allein bestaetigt keinen Empfang. Die zusaetzliche
+Textabfrage im Service Worker ist auf fuenf Sekunden begrenzt, damit eine
+haengende Verbindung die Anzeige nicht unbegrenzt verhindert.
+
+Diese Punkte **in dieser Reihenfolge** pruefen —
 die ersten drei sind die haeufigste Ursache auf Samsung-Geraeten.
 
 **1. Ist die App wirklich installiert (nicht nur ein Lesezeichen)?**
@@ -351,5 +363,5 @@ Datensatz (`POST /unsubscribe`).
 | Push wird verspaetet zugestellt | Jede Erinnerung hat eine begrenzte Lebensdauer (`TTL_BY_KIND`: Beginn 45 Min, Feierabend 90 Min, Tagescheck 3 Std). Was liegen bleibt, verfaellt beim Push-Dienst, statt am naechsten Tag aufzutauchen. Kommt eine Meldung trotzdem verspaetet an, fragt der Service Worker `/pending`; ist der Anlass nicht mehr aktuell oder der Tag laengst erfasst, erscheint ein neutraler Text statt einer falschen Aufforderung. |
 | Mehrere Geraete | Jedes Geraet hat ein eigenes Abo mit eigenem Status. Wird auf Geraet A gestempelt, erinnert Geraet B trotzdem, bis dort die App geoeffnet wird. |
 | Subscription laeuft ab | Der Worker loescht abgelaufene Eintraege automatisch (HTTP 404/410). Schalter in den Einstellungen aus/ein legt ein neues Abo an. |
-| Anlass wird nicht abgefragt | Der Push kommt ohne Text; der Service Worker fragt `POST /pending`, worum es geht. Faellt das aus (kein Netz im SW), leitet er den Anlass aus der Uhrzeit ab — der Text kann dann unpassend sein, die Aktions-Knoepfe stempeln aber weiterhin korrekt. |
+| Anlass wird nicht abgefragt | Der Push kommt ohne Text; der Service Worker fragt `POST /pending`, worum es geht. Bei einem Fehler oder nach fuenf Sekunden erscheint eine neutrale Erinnerung ohne Stempelaktion. Ein Anlass wird nicht aus der Uhrzeit geraten. |
 | Sommer-/Winterzeit | Der Worker rechnet in `Europe/Berlin`; der 5-Minuten-Cron trifft die eingestellte Ortszeit ganzjaehrig. |
