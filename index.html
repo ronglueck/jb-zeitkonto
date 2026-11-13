@@ -351,6 +351,243 @@
   }
   .openday button:active{transform:translateY(1px)}
 
+  /* ============================================================
+     Aussehen (Einstellungen > Ansicht). "klassisch" = Stand ohne Overrides.
+  ============================================================ */
+  .stamp-ring,.stamp-prog{display:none}
+  /* Bild in der Heute-Karte (nur Looks mit eigenem Motiv, siehe THEME_ART) */
+  .stamp-live{display:flex;align-items:center;gap:14px}
+  .stamp-live .stamp-state{flex:1;min-width:0}
+  .stamp-art{flex:0 0 auto;width:88px;height:88px;border-radius:20px;object-fit:cover;margin-bottom:8px}
+  @media (max-width:339px){ .stamp-art{width:68px;height:68px;border-radius:16px} }
+  html[data-theme="neujahr"] .stamp-ring{display:none}
+  html[data-theme="neujahr"] .stamp-prog{display:block;height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:0 0 14px}
+  .themeseg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px}
+  .themeseg button{
+    appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:11px;min-height:48px;padding:8px 10px;font-size:13.5px;font-weight:700;
+    cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:9px;text-align:left;
+  }
+  .themeseg button[aria-checked="true"]{border:2px solid var(--brand);padding:7px 9px}
+  .themeseg .sw{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:1px solid rgba(128,128,128,.45)}
+
+  /* Fortschritt des laufenden Tages: Balken (ruhig, kraeftig) bzw. Ring (nacht) */
+  html[data-theme="ruhig"] .stamp-prog,html[data-theme="kraeftig"] .stamp-prog{
+    display:block;height:8px;border-radius:4px;background:var(--brand-soft);overflow:hidden;margin:0 0 14px;
+  }
+  .stamp-prog i{display:block;height:100%;border-radius:4px;background:var(--brand);width:calc(var(--p) * 1%)}
+
+  /* ---------- Ruhig & hell ---------- */
+  html[data-theme="ruhig"]{
+    --paper:#F1F4EF;--card:#ffffff;--ink:#1E2A26;--muted:#55635E;--faint:#76837E;
+    --line:#E2E7E0;--line2:#EDF0EB;--brand:#1F6F5B;--brand-soft:#DCEBE4;
+    --minus:#B4321F;--minus-soft:#FBE9E6;--bar:#1E2A26;--bar-ink:#1E2A26;--accent:#caa64a;
+    --mono:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--shadow:none;
+  }
+  html[data-theme="ruhig"] body{padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+  html[data-theme="ruhig"] .top{background:var(--paper);color:var(--ink)}
+  html[data-theme="ruhig"] .top .mark{background:var(--brand);color:#fff;border:0;border-radius:13px;width:38px;height:38px}
+  html[data-theme="ruhig"] .top h1{font-size:18px;font-weight:800}
+  html[data-theme="ruhig"] .top .emp{color:var(--muted)}
+  html[data-theme="ruhig"] .iconbtn{background:var(--card);border:0;color:var(--ink);border-radius:13px;width:42px;height:42px}
+  html[data-theme="ruhig"] .monthbar button{border:0;border-radius:13px}
+  html[data-theme="ruhig"] .week{border:0;border-radius:24px}
+  html[data-theme="ruhig"] .week-head{background:none}
+  html[data-theme="ruhig"] .stamp{border:0;border-radius:28px;padding:18px}
+  html[data-theme="ruhig"] .stamp.live .lbl{color:var(--brand)}
+  html[data-theme="ruhig"] .stamp-state .big{font-size:50px;letter-spacing:-1.5px;line-height:1;margin-top:6px}
+  html[data-theme="ruhig"] .stamp-state .big small{font-size:15px}
+  html[data-theme="ruhig"] .stamp-state .sub{margin-top:8px;font-size:13px}
+  html[data-theme="ruhig"] .sbtn{border-radius:18px}
+  html[data-theme="ruhig"] .btn{border-radius:16px}
+  html[data-theme="ruhig"] .bottom{
+    left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));
+    border-radius:22px;background:var(--card);color:var(--ink);padding:10px;gap:4px;
+    box-shadow:0 6px 24px rgba(30,42,38,.14);
+  }
+  html[data-theme="ruhig"] .cell{background:none;text-align:center}
+  html[data-theme="ruhig"] .cell .k,html[data-theme="ruhig"] .cell .v small{color:var(--muted)}
+  html[data-theme="ruhig"] .cell .v.pos{color:var(--brand)}
+  html[data-theme="ruhig"] .cell .v.neg{color:var(--minus)}
+
+  /* ---------- Nacht ---------- */
+  html[data-theme="nacht"]{
+    color-scheme:dark;
+    --paper:#0D1015;--card:#161B22;--ink:#ECEFF4;--muted:#9AA6B5;--faint:#8591A0;
+    --line:#2A313C;--line2:#222933;--brand:#5EEAD4;--brand-soft:#12332F;
+    --minus:#FF9A8B;--minus-soft:#3A1E1B;--bar:#11151B;--bar-ink:#ECEFF4;--accent:#F2D98A;
+    --mono:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--shadow:none;
+  }
+  html[data-dark] .top{border-bottom:1px solid var(--line)}
+  html[data-dark] .top .mark{background:none;border:1.5px solid var(--brand);color:var(--brand)}
+  html[data-dark] .top .emp,html[data-dark] .cell .k,html[data-dark] .cell .v small{color:var(--muted)}
+  html[data-dark] .week-head{background:#1B2129}
+  html[data-dark] .day:active{background:#1B2129}
+  html[data-dark] .badge.zero,html[data-dark] .badge.abbau,
+  html[data-dark] .typeseg button.active-abbau{background:var(--line2);color:var(--ink)}
+  html[data-dark] .badge.zero{color:var(--muted)}
+  html[data-dark] .badge.feiertag,html[data-dark] .typeseg button.active-feiertag,
+  html[data-dark] .day-feedback.warning,html[data-dark] .openday{background:#3A3115;color:#F2D98A}
+  html[data-dark] .openday .txt{color:#F2D98A}
+  html[data-dark] .openday .txt strong{color:#FFE9A8}
+  html[data-dark] .grip{background:#3A424E}
+  html[data-dark] .toast{background:#ECEFF4;color:#0D1015}
+  html[data-dark] .sbtn,html[data-dark] .btn.primary,html[data-dark] #wn-ok{color:#0D1015}
+  html[data-dark] .sbtn.stop{background:var(--brand)}
+  html[data-dark] .sbtn.soft{color:var(--ink)}
+  html[data-dark] .stamp.live{border-color:rgba(94,234,212,.5)}
+  html[data-dark] .stamp.live .lbl{color:var(--brand)}
+  html[data-dark] .stamp-state .big{font-size:34px}
+  html[data-dark] .stamp-ring{
+    display:block;flex:0 0 auto;width:78px;height:78px;border-radius:50%;margin-bottom:8px;
+    background:conic-gradient(var(--brand) calc(var(--p) * 1%),var(--line) 0);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 10px),#000 calc(100% - 9px));
+            mask:radial-gradient(farthest-side,transparent calc(100% - 10px),#000 calc(100% - 9px));
+  }
+  html[data-dark] .cell .v.pos{color:var(--brand)}
+  html[data-dark] .cell .v.neg{color:var(--minus)}
+  html[data-dark] .bottom{border-top:1px solid var(--line);box-shadow:none}
+
+  /* ---------- Kräftig ---------- */
+  html[data-theme="kraeftig"]{
+    --paper:#F5F3FF;--card:#ffffff;--ink:#17132B;--muted:#5A5670;--faint:#7F7B96;
+    --line:#E4DFF7;--line2:#EFEBFB;--brand:#4B2BD6;--brand-soft:#E7E1FF;
+    --minus:#C2281D;--minus-soft:#FCE8E6;--bar:#4B2BD6;--bar-ink:#ffffff;--accent:#FFD23F;
+    --mono:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--shadow:none;
+  }
+  html[data-theme="kraeftig"] .top .mark{background:var(--accent);color:var(--ink);border:0;border-radius:50%;width:38px;height:38px}
+  html[data-theme="kraeftig"] .top h1{font-size:18px;font-weight:800}
+  html[data-theme="kraeftig"] .top .emp{color:#DCD5FF}
+  html[data-theme="kraeftig"] .iconbtn{background:#3A1FB0;border:0;border-radius:50%;width:42px;height:42px}
+  html[data-theme="kraeftig"] .monthbar button{border:0;border-radius:50%}
+  html[data-theme="kraeftig"] .week{border:0;border-radius:22px}
+  html[data-theme="kraeftig"] .week-head{background:none}
+  html[data-theme="kraeftig"] .badge.pos,html[data-theme="kraeftig"] .diff.pos{background:var(--accent);color:var(--ink)}
+  html[data-theme="kraeftig"] .diff.neg{background:var(--minus-soft)}
+  html[data-theme="kraeftig"] .diff.pos,html[data-theme="kraeftig"] .diff.neg{display:inline-block;border-radius:999px;padding:2px 8px;margin-top:3px}
+  html[data-theme="kraeftig"] .stamp{border:0;border-radius:26px;padding:18px}
+  html[data-theme="kraeftig"] .sbtn,html[data-theme="kraeftig"] .btn{border-radius:999px}
+  html[data-theme="kraeftig"] .stamp.live{background:var(--brand);color:#fff}
+  html[data-theme="kraeftig"] .stamp.live .lbl{color:var(--accent)}
+  html[data-theme="kraeftig"] .stamp.live .dt,html[data-theme="kraeftig"] .stamp.live .sub,
+  html[data-theme="kraeftig"] .stamp.live .big small,html[data-theme="kraeftig"] .stamp.live .stamp-edit{color:#DCD5FF}
+  html[data-theme="kraeftig"] .stamp.live .stamp-state{color:#fff}
+  html[data-theme="kraeftig"] .stamp-state .big{font-size:60px;letter-spacing:-2px;line-height:1;margin-top:6px}
+  html[data-theme="kraeftig"] .stamp-state .big small{font-size:15px}
+  html[data-theme="kraeftig"] .stamp-state .sub{margin-top:8px;font-size:13px}
+  html[data-theme="kraeftig"] .stamp.live .sbtn{background:#fff;color:var(--ink)}
+  html[data-theme="kraeftig"] .stamp.live .sbtn.stop{background:var(--accent);color:var(--ink)}
+  html[data-theme="kraeftig"] .stamp.live .stamp-prog{background:#3A1FB0}
+  html[data-theme="kraeftig"] .stamp.live .stamp-prog i{background:var(--accent)}
+  html[data-theme="kraeftig"] .bottom{background:#17132B}
+  html[data-theme="kraeftig"] .cell .k,html[data-theme="kraeftig"] .cell .v small{color:#BDB6D6}
+  html[data-theme="kraeftig"] .cell .v.pos{color:var(--accent)}
+  html[data-theme="kraeftig"] .openday button{color:var(--ink)}
+
+  /* ---------- Festtage: Weihnachten ---------- */
+  html[data-theme="weihnachten"]{
+    --paper:#FAF6EE;--card:#ffffff;--ink:#1F2A22;--muted:#5A655C;--faint:#7C867E;
+    --line:#E9E2D3;--line2:#F2EDE2;--brand:#1B6B45;--brand-soft:#DDEEE3;
+    --minus:#B3261E;--minus-soft:#FBE7E4;--bar:#0F3D2A;--bar-ink:#ffffff;--accent:#E3B04B;
+    --mono:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--shadow:none;
+  }
+  html[data-theme="weihnachten"] .top{
+    background-color:var(--bar);
+    background-image:
+      radial-gradient(circle,rgba(255,255,255,.85) 1.6px,transparent 2px),
+      radial-gradient(circle,rgba(255,255,255,.5) 1.2px,transparent 1.6px),
+      radial-gradient(circle,rgba(255,255,255,.35) 2.2px,transparent 2.6px);
+    /* Schneeflocken als Band am unteren Rand, damit sie nicht durch den Titel laufen */
+    background-repeat:repeat-x;
+    background-size:31px 6px,23px 5px,47px 7px;
+    background-position:4px calc(100% - 3px),15px calc(100% - 9px),27px calc(100% - 5px);
+    padding-bottom:22px;
+  }
+  html[data-theme="weihnachten"] .top .mark{background:#B3261E;color:#fff;border:1.5px solid var(--accent);border-radius:50%;width:38px;height:38px}
+  html[data-theme="weihnachten"] .top .emp{color:#CFE3D6}
+  html[data-theme="weihnachten"] .iconbtn{background:var(--bar);border-color:rgba(255,255,255,.3)}
+  html[data-theme="weihnachten"] .week{border-radius:20px}
+  html[data-theme="weihnachten"] .week-head{background:none}
+  html[data-theme="weihnachten"] .stamp{border-radius:22px;padding:16px;border-color:var(--accent)}
+  html[data-theme="weihnachten"] .stamp.live .lbl{color:var(--brand)}
+  html[data-theme="weihnachten"] .stamp-state .big{font-size:46px;letter-spacing:-1.5px;line-height:1;margin-top:6px}
+  html[data-theme="weihnachten"] .stamp-state .big small{font-size:15px}
+  html[data-theme="weihnachten"] .stamp-state .sub{margin-top:8px;font-size:13px}
+  html[data-theme="weihnachten"] .sbtn,html[data-theme="weihnachten"] .btn{border-radius:16px}
+  html[data-theme="weihnachten"] .sbtn.stop{background:#B3261E}
+  html[data-theme="weihnachten"] .stamp-prog{display:block;height:8px;border-radius:4px;background:var(--brand-soft);overflow:hidden;margin:0 0 14px}
+  html[data-theme="weihnachten"] .stamp-prog i{background:#B3261E}
+  html[data-theme="weihnachten"] .cell .k,html[data-theme="weihnachten"] .cell .v small{color:#CFE3D6}
+  html[data-theme="weihnachten"] .cell .v.pos{color:#F0CE7E}
+  html[data-theme="weihnachten"] .cell .v.neg{color:#FFB4AB}
+
+  /* Baumelnde Weihnachtskugeln unter der Kopfzeile (Foto: images/kugel.webp) */
+  .deco{display:none}
+  html[data-theme="weihnachten"] .deco{display:block;position:absolute;left:0;right:0;top:100%;height:0;pointer-events:none}
+  .orn{
+    position:absolute;top:-6px;left:var(--x);width:var(--size);margin-left:calc(var(--size) / -2);
+    display:flex;flex-direction:column;align-items:center;
+    transform-origin:50% 0;animation:orn-swing var(--dur) ease-in-out var(--delay) infinite alternate;
+    filter:drop-shadow(0 5px 5px rgba(20,30,24,.28));
+  }
+  .orn i{display:block;width:1.5px;height:var(--len);background:linear-gradient(#E3B04B,#B98A2E)}
+  .orn img{display:block;width:100%;height:auto;margin-top:-3px;filter:var(--tint,none)}
+  @keyframes orn-swing{from{transform:rotate(calc(var(--amp) * -1))}to{transform:rotate(var(--amp))}}
+
+  /* Bunter LED-Rahmen um die Heute-Karte: umlaufende Farben, dazu ein glimmender Schein */
+  @property --led-a{syntax:"<angle>";inherits:false;initial-value:0deg}
+  html[data-theme="weihnachten"] .stamp{position:relative;border-color:transparent;animation:led-glow 6s ease-in-out infinite}
+  html[data-theme="weihnachten"] .stamp::before{
+    content:"";position:absolute;inset:-3px;border-radius:25px;padding:3px;pointer-events:none;
+    background:conic-gradient(from var(--led-a),#FF3B30,#FFB020,#FFE45C,#34C759,#32ADE6,#AF52DE,#FF3B30);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+    animation:led-spin 7s linear infinite;
+  }
+  @keyframes led-spin{to{--led-a:360deg}}
+  @keyframes led-glow{
+    0%,100%{box-shadow:0 0 10px 1px rgba(255,59,48,.45),0 0 26px 4px rgba(255,176,32,.22)}
+    25%{box-shadow:0 0 16px 3px rgba(255,200,60,.6),0 0 32px 8px rgba(52,199,89,.28)}
+    50%{box-shadow:0 0 10px 1px rgba(52,199,89,.45),0 0 26px 4px rgba(50,173,230,.25)}
+    75%{box-shadow:0 0 16px 3px rgba(50,173,230,.55),0 0 32px 8px rgba(175,82,222,.3)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .orn,html[data-theme="weihnachten"] .stamp,html[data-theme="weihnachten"] .stamp::before{animation:none}
+  }
+
+  /* ---------- Festtage: Neujahr (dunkel) ---------- */
+  html[data-theme="neujahr"]{
+    color-scheme:dark;
+    --paper:#0B0F24;--card:#151A36;--ink:#F3F1E7;--muted:#A9AECB;--faint:#8D92B3;
+    --line:#2B3158;--line2:#20264A;--brand:#F2C14E;--brand-soft:#3A3115;
+    --minus:#FF9A8B;--minus-soft:#3A1E1B;--bar:#080B1C;--bar-ink:#F3F1E7;--accent:#F2C14E;
+    --mono:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--shadow:none;
+  }
+  html[data-theme="neujahr"] .top{
+    background-color:var(--bar);
+    background-image:
+      radial-gradient(circle,#F2C14E 1.6px,transparent 2px),
+      radial-gradient(circle,#FF8FB1 1.4px,transparent 1.8px),
+      radial-gradient(circle,#7DE3E1 1.4px,transparent 1.8px),
+      radial-gradient(circle,rgba(255,255,255,.7) 1px,transparent 1.4px);
+    /* Konfetti als Band am unteren Rand */
+    background-repeat:repeat-x;
+    background-size:37px 6px,53px 5px,61px 5px,19px 4px;
+    background-position:5px calc(100% - 4px),21px calc(100% - 10px),33px calc(100% - 6px),11px calc(100% - 12px);
+    padding-bottom:24px;border-bottom:0;
+  }
+  html[data-theme="neujahr"] .week-head,html[data-theme="neujahr"] .day:active{background:#1B2142}
+  html[data-theme="neujahr"] .stamp.live{border-color:rgba(242,193,78,.6)}
+  html[data-theme="neujahr"] .stamp{border-radius:22px}
+  html[data-theme="neujahr"] .sbtn,html[data-theme="neujahr"] .btn{border-radius:16px}
+
+  /* Festtagsgruss ueber der Stempelkarte */
+  .season-note{display:none}
+  html[data-season] .season-note{
+    display:block;text-align:center;font-size:13.5px;font-weight:700;color:var(--brand);
+    padding:6px 16px 0;letter-spacing:.2px;
+  }
+
   /* ---------- Druckbericht: am Bildschirm ausgeblendet ---------- */
   #report{display:none}
 
@@ -413,6 +650,12 @@
   <button class="iconbtn" id="reportBtn" title="Monatsbericht als PDF" aria-label="Monatsbericht als PDF">🖨</button>
   <button class="iconbtn" id="todayBtn" title="Heute">⊚</button>
   <button class="iconbtn" id="settingsBtn" title="Einstellungen">⚙</button>
+  <div class="deco" aria-hidden="true">
+    <span class="orn" style="--x:21%;--size:30px;--len:16px;--dur:2.9s;--delay:-.4s;--amp:8deg"><i></i><img src="./images/kugel.webp" alt="" loading="lazy"></span>
+    <span class="orn" style="--x:31%;--size:22px;--len:6px;--dur:2.3s;--delay:-1.3s;--amp:10deg;--tint:hue-rotate(42deg) saturate(1.5) brightness(1.25)"><i></i><img src="./images/kugel.webp" alt="" loading="lazy"></span>
+    <span class="orn" style="--x:70%;--size:24px;--len:9px;--dur:2.5s;--delay:-.9s;--amp:9deg;--tint:hue-rotate(125deg) saturate(.9) brightness(1.1)"><i></i><img src="./images/kugel.webp" alt="" loading="lazy"></span>
+    <span class="orn" style="--x:79%;--size:32px;--len:20px;--dur:3.3s;--delay:-2s;--amp:7deg;--tint:hue-rotate(215deg) saturate(1.1) brightness(1.1)"><i></i><img src="./images/kugel.webp" alt="" loading="lazy"></span>
+  </div>
 </header>
 
 <div class="monthbar">
@@ -424,6 +667,7 @@
   <button id="nextM" aria-label="Nächster Monat">›</button>
 </div>
 
+<div class="season-note" id="seasonNote" role="status"></div>
 <div class="wrap" id="stampWrap" style="padding-bottom:0"></div>
 <main class="wrap" id="weeks"></main>
 
@@ -564,6 +808,31 @@
 
   <div class="divider"></div>
   <label style="display:block;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Ansicht</label>
+  <div class="themeseg" id="themeSeg" role="radiogroup" aria-label="Aussehen">
+    <button type="button" role="radio" data-theme-opt="klassisch"><span class="sw" style="background:linear-gradient(135deg,#0f1b24 50%,#eef1f4 50%)"></span>Klassisch</button>
+    <button type="button" role="radio" data-theme-opt="ruhig"><span class="sw" style="background:linear-gradient(135deg,#1F6F5B 50%,#F1F4EF 50%)"></span>Ruhig &amp; hell</button>
+    <button type="button" role="radio" data-theme-opt="nacht"><span class="sw" style="background:linear-gradient(135deg,#0D1015 50%,#5EEAD4 50%)"></span>Nacht</button>
+    <button type="button" role="radio" data-theme-opt="kraeftig"><span class="sw" style="background:linear-gradient(135deg,#4B2BD6 50%,#FFD23F 50%)"></span>Kräftig</button>
+    <button type="button" role="radio" data-theme-opt="weihnachten"><span class="sw" style="background:linear-gradient(135deg,#0F3D2A 50%,#B3261E 50%)"></span>Weihnachten</button>
+    <button type="button" role="radio" data-theme-opt="neujahr"><span class="sw" style="background:linear-gradient(135deg,#0B0F24 50%,#F2C14E 50%)"></span>Neujahr</button>
+  </div>
+  <p class="hint" style="margin-top:0">Das Aussehen wechselt sofort beim Antippen.</p>
+  <div style="display:flex;align-items:center;gap:12px;margin:12px 0 8px">
+    <label for="seasonToggle" style="flex:1;font-size:14px;cursor:pointer">Festtags-Look automatisch</label>
+    <label style="position:relative;display:inline-block;width:44px;height:26px;flex:0 0 auto">
+      <input type="checkbox" id="seasonToggle" style="opacity:0;width:0;height:0;position:absolute">
+      <span id="seasonTrack" style="
+        position:absolute;inset:0;border-radius:99px;cursor:pointer;
+        background:var(--line);transition:background .2s;
+      "></span>
+      <span id="seasonThumb" style="
+        position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+        background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);
+        transition:transform .2s;pointer-events:none;
+      "></span>
+    </label>
+  </div>
+  <p class="hint" style="margin-top:0" id="seasonHint">Vom 1. Advent bis zum 26. Dezember zeigt die App den Weihnachts-Look, vom 27. Dezember bis zum 6. Januar den Neujahrs-Look. Danach gilt wieder das gewählte Aussehen.</p>
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
     <span style="flex:1;font-size:14px">Wochenendtage anzeigen</span>
     <label style="position:relative;display:inline-block;width:44px;height:26px;flex:0 0 auto">
@@ -685,6 +954,55 @@ function migrate(s){
   return s;
 }
 let state = loadState();
+
+// Aussehen: setzt data-theme am <html> und passt die Farbe der Systemleiste an
+const THEMES = {klassisch:"#0f1b24", ruhig:"#F1F4EF", nacht:"#11151B", kraeftig:"#4B2BD6",
+                weihnachten:"#0F3D2A", neujahr:"#080B1C"};
+const DARK_THEMES = {nacht:true, neujahr:true};
+
+// Festtage: {theme, key, note} fuer das Datum oder null.
+// Weihnachten = 1. Advent (4. Sonntag vor dem 25.12.) bis 26.12.,
+// Neujahr = 27.12. bis 6.1. Der key benennt die Saison samt Jahr.
+function seasonFor(d){
+  const y=d.getFullYear(), m=d.getMonth(), day=d.getDate();
+  if(m===0 && day<=6) return {theme:"neujahr", key:"neujahr-"+y, note:"Frohes neues Jahr "+y+"!"};
+  if(m===11 && day>=27) return {theme:"neujahr", key:"neujahr-"+(y+1), note:"Guten Rutsch ins Jahr "+(y+1)+"!"};
+  const xmas=new Date(y,11,25);
+  const advent1=new Date(y,11,25-(xmas.getDay()||7)-21);
+  const today=new Date(y,m,day);
+  if(today>=advent1 && (m===10 || day<=26)){
+    return {theme:"weihnachten", key:"weihnachten-"+y, note:(m===11 && day>=24) ? "Frohe Weihnachten!" : "Schöne Adventszeit!"};
+  }
+  return null;
+}
+// Die Saison gilt, solange der Schalter an ist und in dieser Saison nicht
+// ausdruecklich ein anderes Aussehen gewaehlt wurde (settings.seasonOff).
+function activeSeason(){
+  if(state.settings.seasonal===false) return null;
+  const sn=seasonFor(new Date());
+  return (sn && state.settings.seasonOff!==sn.key) ? sn : null;
+}
+// Looks mit eigenem Motiv in der Heute-Karte (images/heute-<look>.webp)
+const THEME_ART = {ruhig:true, kraeftig:true, weihnachten:true, neujahr:true};
+function stampArt(){
+  const t=document.documentElement.getAttribute("data-theme");
+  return THEME_ART[t] ? '<img class="stamp-art" alt="" src="./images/heute-'+t+'.webp" onerror="this.remove()">' : '';
+}
+function applyTheme(){
+  const chosen = THEMES[state.settings.theme] ? state.settings.theme : "klassisch";
+  const sn = activeSeason();
+  const t = sn ? sn.theme : chosen;
+  const root=document.documentElement;
+  root.setAttribute("data-theme", t);
+  if(DARK_THEMES[t]) root.setAttribute("data-dark","1"); else root.removeAttribute("data-dark");
+  if(sn) root.setAttribute("data-season", sn.theme); else root.removeAttribute("data-season");
+  const note=document.getElementById("seasonNote"); if(note) note.textContent = sn ? sn.note : "";
+  const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.setAttribute("content", THEMES[t]);
+  const cs=document.querySelector('meta[name="color-scheme"]'); if(cs) cs.setAttribute("content", DARK_THEMES[t] ? "dark" : "light");
+  document.querySelectorAll("[data-theme-opt]").forEach(b=>
+    b.setAttribute("aria-checked", b.getAttribute("data-theme-opt")===t ? "true" : "false"));
+}
+applyTheme();
 
 /* ============================================================
    MODUL 2 — Rechenkern (Zeit, Soll/Ist, Saldo)
@@ -1099,8 +1417,8 @@ function renderToday(){
          '<div class="stamp-btns"><button class="sbtn soft" data-act="start" style="flex:1">'+
            '<span class="ico">▶</span>TROTZDEM STEMPELN</button></div>';
   } else if(st==="idle"){
-    body='<div class="stamp-state">Noch nicht gestempelt'+
-         '<span class="sub">Soll heute '+fmtDur(sollMin(d))+' Std</span></div>'+
+    body='<div class="stamp-live"><div class="stamp-state">Noch nicht gestempelt'+
+         '<span class="sub">Soll heute '+fmtDur(sollMin(d))+' Std</span></div>'+stampArt()+'</div>'+
          '<div class="stamp-btns"><button class="sbtn" data-act="start">'+
            '<span class="ico">▶</span>KOMMEN</button></div>'+
          '<button class="stamp-edit" data-act="edit">Zeiten von Hand eintragen</button>';
@@ -1110,8 +1428,12 @@ function renderToday(){
     let pauseInfo='';
     if(hadBreak) pauseInfo=' · Pause '+e.bStart+'–'+e.bEnd;
     else if(fbDur>0) pauseInfo=' · abzüglich '+fbDur+' Min Pause';
-    body='<div class="stamp-state"><span class="big">'+fmtDur(workedSoFar(e))+'<small>Std</small></span>'+
+    const soll=sollMin(d);
+    const pct=soll>0 ? Math.min(100, Math.round(workedSoFar(e)*100/soll)) : 0;
+    body='<div class="stamp-live"><div class="stamp-state"><span class="big">'+fmtDur(workedSoFar(e))+'<small>Std</small></span>'+
          '<span class="sub">seit '+e.start+(closedGaps(e).length?' · weg '+gapsText(e):'')+pauseInfo+'</span></div>'+
+         (soll>0?'<div class="stamp-ring" aria-hidden="true" style="--p:'+pct+'"></div>':'')+stampArt()+'</div>'+
+         (soll>0?'<div class="stamp-prog" aria-hidden="true" style="--p:'+pct+'"><i></i></div>':'')+
          '<div class="stamp-btns">'+
            '<button class="sbtn stop" data-act="end"><span class="ico">⏹</span>FEIERABEND</button>'+
          '</div>'+
@@ -1255,7 +1577,7 @@ $("stampWrap").addEventListener("click", ev=>{
 });
 
 // Rueckkehr zur App: Dauer aktualisieren und einen Datumswechsel mitnehmen
-document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) render(); });
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden){ applyTheme(); render(); } });
 
 // Einstieg von aussen: Homescreen-Verknuepfung oder Benachrichtigungs-Aktion
 function handleStampParam(){
@@ -1494,6 +1816,11 @@ function openSettings(){
   if(weToggle){ weToggle.checked=showWE; }
   if(weTrack){ weTrack.style.background = showWE ? "var(--brand)" : "var(--line)"; }
   if(weThumb){ weThumb.style.transform  = showWE ? "translateX(18px)" : "translateX(0)"; }
+  // Festtags-Toggle initialisieren
+  const seasonOn = state.settings.seasonal !== false;
+  $("seasonToggle").checked=seasonOn;
+  $("seasonTrack").style.background = seasonOn ? "var(--brand)" : "var(--line)";
+  $("seasonThumb").style.transform  = seasonOn ? "translateX(18px)" : "translateX(0)";
   // Gesamt-Toggle initialisieren
   const showTot = state.settings.showTotalSaldo !== false;
   const totToggle=$("totalToggle"), totTrack=$("totalTrack"), totThumb=$("totalThumb");
@@ -1506,6 +1833,7 @@ function fmtHHMM(min){ return pad(Math.floor(min/60))+":"+pad(min%60); }
 
 // Ansicht-Toggles: visuelles Feedback sofort beim Klicken
 const VIEW_TOGGLES = {
+  seasonToggle:{track:"seasonTrack", thumb:"seasonThumb"},
   weekendToggle:{track:"weekendTrack", thumb:"weekendThumb"},
   totalToggle:{track:"totalTrack", thumb:"totalThumb"}
 };
@@ -1550,9 +1878,22 @@ $("saveSet").onclick=()=>{
   // Geaenderte Zeiten dem Erinnerungsdienst melden
   if(typeof pushHeartbeat==="function") pushHeartbeat();
 };
+$("themeSeg").addEventListener("click", ev=>{
+  const btn=ev.target.closest("[data-theme-opt]"); if(!btn) return;
+  state.settings.theme=btn.getAttribute("data-theme-opt");
+  // Ausdrueckliche Wahl schlaegt den Festtags-Look — fuer die laufende Saison
+  const sn=seasonFor(new Date());
+  if(sn) state.settings.seasonOff = (sn.theme===state.settings.theme) ? "" : sn.key;
+  saveState(); applyTheme(); renderToday();
+});
+$("seasonToggle").addEventListener("change", ev=>{
+  state.settings.seasonal=ev.target.checked;
+  if(ev.target.checked) state.settings.seasonOff="";
+  saveState(); applyTheme(); renderToday();
+});
 $("resetBtn").onclick=()=>{
   if(confirm("Wirklich ALLE erfassten Zeiten und Einstellungen löschen?")){
-    state=defaultState(); saveState(); hideSheets(); render(); toast("Zurückgesetzt");
+    state=defaultState(); saveState(); applyTheme(); hideSheets(); render(); toast("Zurückgesetzt");
     pushHeartbeat();
   }
 };
@@ -1574,7 +1915,7 @@ $("importFile").onchange=(ev)=>{
     try{
       const data=migrate(JSON.parse(r.result));
       if(!data.entries||typeof data.entries!=="object") throw 0;
-      state=data; saveState(); render(); hideSheets(); toast("Sicherung geladen");
+      state=data; saveState(); applyTheme(); render(); hideSheets(); toast("Sicherung geladen");
       pushHeartbeat();
     }catch(e){ toast("Datei konnte nicht gelesen werden"); }
   };
@@ -2075,8 +2416,13 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 11;
+  const APP_VERSION = 12;
   const WHATS_NEW = [
+    { v: 12, items: [
+      "Neues Aussehen zur Auswahl: Klassisch, Ruhig & hell, Nacht oder Kräftig – in den Einstellungen unter „Ansicht“",
+      "Die neuen Looks zeigen beim laufenden Tag, wie viel vom Soll schon geschafft ist",
+      "Zu den Festtagen schmückt sich die App von selbst: Weihnachts-Look ab dem 1. Advent, Neujahrs-Look ab dem 27. Dezember (abschaltbar)"
+    ]},
     { v: 11, items: [
       "Zweites Kommen: Nach dem Feierabend gibt es den Knopf „Wieder kommen“ – etwa wenn du zwischendurch kurz weg musstest",
       "Die Zeit dazwischen wird minutengenau als Unterbrechung abgezogen, die 30 Minuten Pause zusätzlich",

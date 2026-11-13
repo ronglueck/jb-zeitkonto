@@ -16,6 +16,7 @@ const SUITES = [
   ["test-openday.js", "Laufender Tag & Summen"],
   ["test-stamp.js", "Stempeluhr"],
   ["test-return.js", "Wieder kommen & Unterbrechungen"],
+  ["test-themes.js", "Aussehen (Themes)"],
   ["test-fixedbreak.js", "Feste Pause"],
   ["test-reminders.js", "Erinnerungen & Heartbeat"],
   ["test-worker.mjs", "Worker-Logik (ohne Browser)"]
