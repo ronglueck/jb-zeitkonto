@@ -508,7 +508,7 @@
   html[data-theme="weihnachten"] .iconbtn{background:var(--bar);border-color:rgba(255,255,255,.3)}
   html[data-theme="weihnachten"] .week{border-radius:20px}
   html[data-theme="weihnachten"] .week-head{background:none}
-  html[data-theme="weihnachten"] .stamp{border-radius:22px;padding:16px;border-color:var(--accent)}
+  html[data-theme="weihnachten"] .stamp{border-radius:22px;padding:16px}
   html[data-theme="weihnachten"] .stamp.live .lbl{color:var(--brand)}
   html[data-theme="weihnachten"] .stamp-state .big{font-size:46px;letter-spacing:-1.5px;line-height:1;margin-top:6px}
   html[data-theme="weihnachten"] .stamp-state .big small{font-size:15px}
@@ -534,25 +534,22 @@
   .orn img{display:block;width:100%;height:auto;margin-top:-3px;filter:var(--tint,none)}
   @keyframes orn-swing{from{transform:rotate(calc(var(--amp) * -1))}to{transform:rotate(var(--amp))}}
 
-  /* Bunter LED-Rahmen um die Heute-Karte: umlaufende Farben, dazu ein glimmender Schein */
-  @property --led-a{syntax:"<angle>";inherits:false;initial-value:0deg}
-  html[data-theme="weihnachten"] .stamp{position:relative;border-color:transparent;animation:led-glow 6s ease-in-out infinite}
-  html[data-theme="weihnachten"] .stamp::before{
-    content:"";position:absolute;inset:-3px;border-radius:25px;padding:3px;pointer-events:none;
-    background:conic-gradient(from var(--led-a),#FF3B30,#FFB020,#FFE45C,#34C759,#32ADE6,#AF52DE,#FF3B30);
-    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
-    animation:led-spin 7s linear infinite;
+  /* Lichterkette um die Heute-Karte: einzelne bunte Laempchen (layoutLeds) an einem Kabel */
+  html[data-theme="weihnachten"] .stamp{position:relative;border:1.5px solid #2C5A44}
+  .leds{display:none}
+  html[data-theme="weihnachten"] .leds{display:block;position:absolute;inset:-1.5px;pointer-events:none}
+  .led{
+    position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff 0,var(--c) 45%);
+    box-shadow:0 0 5px 1px var(--c),0 0 12px 3px var(--c);
+    animation:led-twinkle var(--dur) ease-in-out var(--delay) infinite;
   }
-  @keyframes led-spin{to{--led-a:360deg}}
-  @keyframes led-glow{
-    0%,100%{box-shadow:0 0 10px 1px rgba(255,59,48,.45),0 0 26px 4px rgba(255,176,32,.22)}
-    25%{box-shadow:0 0 16px 3px rgba(255,200,60,.6),0 0 32px 8px rgba(52,199,89,.28)}
-    50%{box-shadow:0 0 10px 1px rgba(52,199,89,.45),0 0 26px 4px rgba(50,173,230,.25)}
-    75%{box-shadow:0 0 16px 3px rgba(50,173,230,.55),0 0 32px 8px rgba(175,82,222,.3)}
+  @keyframes led-twinkle{
+    0%,100%{opacity:1;filter:brightness(1.15)}
+    50%{opacity:.4;filter:brightness(.75);box-shadow:0 0 2px 0 var(--c)}
   }
   @media (prefers-reduced-motion:reduce){
-    .orn,html[data-theme="weihnachten"] .stamp,html[data-theme="weihnachten"] .stamp::before{animation:none}
+    .orn,.led{animation:none}
   }
 
   /* ---------- Festtage: Neujahr (dunkel) ---------- */
@@ -1474,8 +1471,47 @@ function renderToday(){
   }
 
   wrap.innerHTML=html;
+  layoutLeds();
   scheduleStampTick(st);
 }
+
+// Lichterkette (Weihnachts-Look): Laempchen gleichmaessig auf dem Rand der
+// Heute-Karte verteilen. Die Karte aendert ihre Hoehe je nach Zustand, deshalb
+// wird nach jedem Zeichnen neu gerechnet.
+const LED_COLORS=["#FF3B30","#FFB020","#34C759","#32ADE6","#E05BD8"];
+function layoutLeds(){
+  if(document.documentElement.getAttribute("data-theme")!=="weihnachten") return;
+  const card=document.querySelector("#stampWrap .stamp"); if(!card) return;
+  const w=card.offsetWidth, h=card.offsetHeight; if(!w || !h) return;
+  const r=Math.min(22, w/2, h/2), sw=w-2*r, sh=h-2*r, arc=Math.PI*r/2;
+  const total=2*sw+2*sh+4*arc, n=Math.max(8, Math.round(total/24)), step=total/n;
+  // Punkt auf dem abgerundeten Rechteck, d = Weg ab der oberen linken Geraden im Uhrzeigersinn
+  const corner=(cx,cy,a0,t)=>{ const a=a0+t*Math.PI/2; return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; };
+  const at=d=>{
+    if(d<sw) return [r+d,0]; d-=sw;
+    if(d<arc) return corner(w-r,r,-Math.PI/2,d/arc); d-=arc;
+    if(d<sh) return [w,r+d]; d-=sh;
+    if(d<arc) return corner(w-r,h-r,0,d/arc); d-=arc;
+    if(d<sw) return [w-r-d,h]; d-=sw;
+    if(d<arc) return corner(r,h-r,Math.PI/2,d/arc); d-=arc;
+    if(d<sh) return [0,h-r-d]; d-=sh;
+    return corner(r,r,Math.PI,d/arc);
+  };
+  let out='';
+  for(let i=0;i<n;i++){
+    const p=at(i*step+step/2);
+    out+='<span class="led" style="left:'+p[0].toFixed(1)+'px;top:'+p[1].toFixed(1)+'px;--c:'+LED_COLORS[i%LED_COLORS.length]+
+         ';--dur:'+(1.6+(i%3)*0.5)+'s;--delay:-'+((i*0.37)%2).toFixed(2)+'s"></span>';
+  }
+  const box=document.createElement("div");
+  box.className="leds"; box.setAttribute("aria-hidden","true"); box.innerHTML=out;
+  card.appendChild(box);
+}
+let ledResizeTimer=null;
+window.addEventListener("resize", ()=>{
+  clearTimeout(ledResizeTimer);
+  ledResizeTimer=setTimeout(()=>{ if(document.documentElement.getAttribute("data-theme")==="weihnachten") renderToday(); }, 200);
+});
 
 // Ein Stempelvorgang. Geschrieben wird nur, was zweifelsfrei ist — sonst
 // oeffnet sich der Tag-Editor, damit keine Zeit erfunden wird.

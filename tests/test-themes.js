@@ -141,6 +141,25 @@ const contrast = (page, sel) => page.evaluate(s => {
       check(w + " px: Motiv in der Heute-Karte " + (wantArt ? "geladen" : "nicht vorhanden"), wantArt ? art > 0 : art === null, art);
       const orn = await page.locator(".orn").first().isVisible();
       check(w + " px: Weihnachtskugeln " + (t === "weihnachten" ? "sichtbar" : "ausgeblendet"), orn === (t === "weihnachten"));
+      const leds = await page.evaluate(() => {
+        const card = document.querySelector("#stampWrap .stamp").getBoundingClientRect();
+        const all = [...document.querySelectorAll("#stampWrap .led")].filter(l => getComputedStyle(l.parentElement).display !== "none");
+        const pts = all.map(l => { const r = l.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+        // Abstand jedes Lämpchens zum Kartenrand (0 = genau auf dem Rand)
+        const off = pts.map(([x, y]) => Math.min(Math.abs(x - card.left), Math.abs(x - card.right), Math.abs(y - card.top), Math.abs(y - card.bottom)));
+        const gaps = pts.map((p, i) => { const q = pts[(i + 1) % pts.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]); });
+        return { n: all.length, maxOff: Math.max(0, ...off), minGap: Math.min(...gaps), maxGap: Math.max(...gaps),
+                 colors: new Set(all.map(l => l.style.getPropertyValue("--c"))).size,
+                 inView: pts.every(([x]) => x >= 4 && x <= innerWidth - 4) };
+      });
+      if (t === "weihnachten") {
+        check(w + " px: Lichterkette aus einzelnen Lämpchen", leds.n >= 30 && leds.colors === 5, leds);
+        check(w + " px: Lämpchen sitzen auf dem Kartenrand", leds.maxOff <= 8, leds);
+        check(w + " px: Lämpchen gleichmäßig verteilt (20–28 px)", leds.minGap >= 18 && leds.maxGap <= 28, leds);
+        check(w + " px: Lämpchen innerhalb des Bildschirms", leds.inView, leds);
+      } else {
+        check(w + " px: keine Lichterkette", leds.n === 0, leds);
+      }
       if (t === "weihnachten") {
         const hit = await page.evaluate(() => {
           const lab = document.querySelector(".monthbar .label .m").getBoundingClientRect();
