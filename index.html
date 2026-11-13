@@ -203,6 +203,11 @@
   .pauserow{display:flex;align-items:flex-end;gap:10px}
   .pauserow .field{flex:1;margin-bottom:0}
   .linkbtn{appearance:none;border:0;background:none;color:var(--minus);font-size:12.5px;font-weight:700;cursor:pointer;padding:8px 2px}
+  .linkbtn.add{display:block;color:var(--brand)}
+  .gaprow{margin-top:10px}
+  .gaprow .gDel{flex:0 0 auto;min-width:40px;min-height:44px;font-size:16px}
+  .stamp-return{margin-top:10px}
+  .stamp-return .sbtn.soft{flex:1}
 
   .preview{
     background:var(--card);border:1px solid var(--line);border-radius:13px;
@@ -465,6 +470,8 @@
       <div class="field"><label>Pause bis</label><input type="time" id="fBEnd"></div>
     </div>
     <button class="linkbtn" id="clearBreak">Pause entfernen</button>
+    <div id="gapList"></div>
+    <button class="linkbtn add" id="addGap" type="button">+ Unterbrechung hinzufügen</button>
   </div>
 
   <div class="field"><label>Notiz (optional)</label><input type="text" id="fNote" placeholder="z. B. Arzttermin, Homeoffice …"></div>
@@ -704,7 +711,23 @@ function netMin(e){
   let net = en - s;
   const bs=toMin(e.bStart), be=toMin(e.bEnd);
   if(bs!=null && be!=null) net -= (be - bs);
+  net -= gapsMin(e);
   return Math.max(0, net);
+}
+// Unterbrechungen: Zeiten, in denen sie die Arbeit verlassen hat und danach
+// zurueckgekommen ist (e.gaps = [{from,to}], optional). Sie werden zusaetzlich
+// zur Pause abgezogen.
+function closedGaps(e){
+  return (e && Array.isArray(e.gaps)) ? e.gaps.filter(g=>g && g.from && g.to) : [];
+}
+function gapsMin(e){
+  return closedGaps(e).reduce((sum,g)=>sum+Math.max(0,toMin(g.to)-toMin(g.from)),0);
+}
+function gapsText(e){
+  return closedGaps(e).map(g=>g.from+"–"+g.to).join(", ");
+}
+function gapsNote(e){
+  return closedGaps(e).length ? '<div class="note">Unterbrechung '+gapsText(e)+'</div>' : '';
 }
 // Hilfsfunktion: ist ein Eintrag ein Arbeitstag?
 function isWork(e){ return !e || !e.type || e.type === "work"; }
@@ -932,12 +955,12 @@ function renderDay(d,key,viewMonth,todayKey){
       // Angefangen, aber nicht abgeschlossen: kein Saldo, sondern ein Hinweis
       const heute = (key===todayKey);
       mid='<div class="times">'+ (e.start||"–") +' – <span class="open">'+
-            (heute ? 'läuft' : 'Ende fehlt') +'</span></div>'+
+            (heute ? 'läuft' : 'Ende fehlt') +'</span></div>'+ gapsNote(e) +
           (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
       right='<div class="diff '+(heute?'zero':'neg')+'">'+(heute?'—':'!')+'</div>';
     } else if(e.start||e.end){
       const pause = (e.bStart&&e.bEnd) ? '  ('+'−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)' : '';
-      mid='<div class="times">'+ (e.start||"–") +' – '+ (e.end||"–") + pause +'</div>'+
+      mid='<div class="times">'+ (e.start||"–") +' – '+ (e.end||"–") + pause +'</div>'+ gapsNote(e) +
           (e.note? '<div class="note">'+escapeHtml(e.note)+'</div>':'');
       const diff=dayDiff(d,e);
       right='<div class="net tabnum">'+fmtDur(netMin(e))+'</div>'+
@@ -976,7 +999,7 @@ function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
    Es wird nicht gerundet — gestempelt wird die exakte Minute.
 ============================================================ */
 const TYPE_LABEL = {urlaub:"Urlaub", krank:"Krank", feiertag:"Feiertag", abbau:"Überstundenabbau"};
-const STAMP_KINDS = ["start","break","resume","end"];
+const STAMP_KINDS = ["start","break","resume","end","return"];
 
 // Jetzt-Uhrzeit als "HH:MM" bzw. Minuten seit Mitternacht
 function hhmmNow(){ const n=new Date(); return pad(n.getHours())+":"+pad(n.getMinutes()); }
@@ -1001,13 +1024,23 @@ function fixedBreakCfg(){
 // Lage der festen Pause fuer einen fertigen Arbeitstag.
 // Bevorzugt die eingestellte Uhrzeit; passt sie nicht in den Tag (kurzer
 // Freitag), wird die Pause mittig gelegt. Null, wenn keine Pause moeglich ist.
-function fixedBreakFor(startHHMM, endHHMM){
+// Unterbrechungen (gaps) teilen den Tag in Arbeitsabschnitte; die Pause liegt
+// immer ganz in einem Abschnitt, nie in einer Unterbrechung.
+function fixedBreakFor(startHHMM, endHHMM, gaps){
   const {dur, pref} = fixedBreakCfg();
   if(dur<=0) return null;
   const s=toMin(startHHMM), e=toMin(endHHMM);
-  if(s==null || e==null || e-s<=dur) return null;   // Tag zu kurz fuer die Pause
-  if(pref!=null && pref>=s && pref+dur<=e) return {bStart:fmtHHMM(pref), bEnd:fmtHHMM(pref+dur)};
-  const mid=Math.round((s+e-dur)/2);
+  if(s==null || e==null) return null;
+  const segs=[]; let from=s;
+  closedGaps({gaps:gaps}).map(g=>[toMin(g.from),toMin(g.to)]).sort((a,b)=>a[0]-b[0])
+    .forEach(([gf,gt])=>{ if(gf>from) segs.push([from,Math.min(gf,e)]); from=Math.max(from,gt); });
+  if(e>from) segs.push([from,e]);
+  const total=segs.reduce((sum,x)=>sum+(x[1]-x[0]),0);
+  if(total<=dur) return null;                        // Tag zu kurz fuer die Pause
+  if(pref!=null && segs.some(x=>pref>=x[0] && pref+dur<=x[1])) return {bStart:fmtHHMM(pref), bEnd:fmtHHMM(pref+dur)};
+  const longest=segs.reduce((a,b)=>(b[1]-b[0]>a[1]-a[0])?b:a);
+  if(longest[1]-longest[0]<dur) return null;
+  const mid=Math.round((longest[0]+longest[1]-dur)/2);
   return {bStart:fmtHHMM(mid), bEnd:fmtHHMM(mid+dur)};
 }
 
@@ -1016,7 +1049,7 @@ function fixedBreakFor(startHHMM, endHHMM){
 function workedSoFar(e){
   const s=toMin(e.start); if(s==null) return 0;
   const now=minNow();
-  let net=now-s;
+  let net=now-s-gapsMin(e);
   const bs=toMin(e.bStart), be=toMin(e.bEnd);
   if(bs!=null && be!=null) net-=(be-bs);
   else if(bs!=null) net-=Math.max(0, now-bs);
@@ -1078,7 +1111,7 @@ function renderToday(){
     if(hadBreak) pauseInfo=' · Pause '+e.bStart+'–'+e.bEnd;
     else if(fbDur>0) pauseInfo=' · abzüglich '+fbDur+' Min Pause';
     body='<div class="stamp-state"><span class="big">'+fmtDur(workedSoFar(e))+'<small>Std</small></span>'+
-         '<span class="sub">seit '+e.start+pauseInfo+'</span></div>'+
+         '<span class="sub">seit '+e.start+(closedGaps(e).length?' · weg '+gapsText(e):'')+pauseInfo+'</span></div>'+
          '<div class="stamp-btns">'+
            '<button class="sbtn stop" data-act="end"><span class="ico">⏹</span>FEIERABEND</button>'+
          '</div>'+
@@ -1098,8 +1131,11 @@ function renderToday(){
     const pause=(e.bStart&&e.bEnd)?' (−'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)':'';
     body='<div class="stamp-done"><div class="sum">'+
            '<div class="t">'+e.start+' – '+e.end+pause+'</div>'+
+           (closedGaps(e).length?'<div class="d">Unterbrechung '+gapsText(e)+'</div>':'')+
            '<div class="d">'+fmtDur(netMin(e))+' Std · <span class="'+diffClass(diff)+'">'+fmtSigned(diff)+'</span></div>'+
-         '</div><button class="sbtn soft small" data-act="edit">Ändern</button></div>';
+         '</div><button class="sbtn soft small" data-act="edit">Ändern</button></div>'+
+         '<div class="stamp-btns stamp-return"><button class="sbtn soft" data-act="return">'+
+           '<span class="ico">▶</span>WIEDER KOMMEN</button></div>';
   }
 
   let html='<section class="stamp'+((st==="working"||st==="onbreak")?' live':'')+'">'+
@@ -1152,6 +1188,26 @@ function stampNow(kind){
     e.bEnd=now;
     toast("Pause "+e.bStart+"–"+now+" erfasst");
   }
+  else if(kind==="return"){
+    // Zweites Kommen: der Tag war abgeschlossen, sie ist zurueck. Die Zeit seit
+    // dem Feierabend wird zur Unterbrechung, der Tag laeuft weiter.
+    if(!e.start){ toast("Zuerst Kommen stempeln"); return; }
+    if(!e.end){ toast("Der Tag läuft schon seit "+e.start); return; }
+    if(toMin(now) < toMin(e.end)){
+      openDay(key);
+      toast("Rückkehr läge vor dem Feierabend – bitte prüfen");
+      return;
+    }
+    const left=e.end;
+    e.gaps=closedGaps(e);
+    if(toMin(now) > toMin(left)) e.gaps.push({from:left, to:now});
+    if(!e.gaps.length) delete e.gaps;
+    e.end="";
+    // Automatisch gesetzte Pause verwerfen — sie wird beim endgueltigen
+    // Feierabend passend zum ganzen Tag neu gelegt. Von Hand erfasste bleibt.
+    if(e.bAuto){ e.bStart=""; e.bEnd=""; delete e.bAuto; }
+    toast(now===left ? "Feierabend zurückgenommen" : "Wieder da um "+now+" · weg seit "+left);
+  }
   else if(kind==="end"){
     if(e.end){ toast("Feierabend steht schon: "+e.end); return; }
     if(!e.start){
@@ -1169,16 +1225,17 @@ function stampNow(kind){
       toast("Feierabend "+bs+" (ab Pausenbeginn)");
       return;
     }
-    if(toMin(now) <= toMin(e.start)){
+    const lastMark=closedGaps(e).reduce((m,g)=>Math.max(m,toMin(g.to)), toMin(e.start));
+    if(toMin(now) <= lastMark){
       openDay(key, {end:now});
-      toast("Ende läge vor dem Beginn – bitte prüfen");
+      toast(lastMark>toMin(e.start) ? "Ende läge vor der Rückkehr – bitte prüfen" : "Ende läge vor dem Beginn – bitte prüfen");
       return;
     }
     e.end=now;
     // Feste Pause automatisch eintragen, wenn fuer heute noch keine erfasst ist
     if(!(e.bStart && e.bEnd)){
-      const fb=fixedBreakFor(e.start, e.end);
-      if(fb){ e.bStart=fb.bStart; e.bEnd=fb.bEnd; }
+      const fb=fixedBreakFor(e.start, e.end, e.gaps);
+      if(fb){ e.bStart=fb.bStart; e.bEnd=fb.bEnd; e.bAuto=true; }
     }
     toast("Feierabend "+now+" · "+fmtDur(netMin(e))+" Std");
   }
@@ -1250,6 +1307,7 @@ function openDay(key, overrides){
   $("fStart").value=e.start||""; $("fEnd").value=e.end||"";
   $("fBStart").value=e.bStart||""; $("fBEnd").value=e.bEnd||"";
   $("fNote").value=e.note||"";
+  renderGapRows(isWork(e) ? (e.gaps||[]) : []);
   $("delDay").style.display = state.entries[key] ? "block":"none";
   setTypeSegment(e.type||"work");
   showSheet("daySheet");
@@ -1259,7 +1317,23 @@ function currentEntry(){
   if(!isWork({type})){
     return {type, note:$("fNote").value.trim()};
   }
-  return {type:"work",start:$("fStart").value,end:$("fEnd").value,bStart:$("fBStart").value,bEnd:$("fBEnd").value,note:$("fNote").value.trim()};
+  const e={type:"work",start:$("fStart").value,end:$("fEnd").value,bStart:$("fBStart").value,bEnd:$("fBEnd").value,note:$("fNote").value.trim()};
+  const gaps=readGapRows().filter(g=>g.from||g.to);
+  if(gaps.length) e.gaps=gaps;
+  return e;
+}
+// Unterbrechungen im Editor: eine Zeile je Abwesenheit (Weg von / Zurück um)
+function renderGapRows(gaps){
+  $("gapList").innerHTML=gaps.map((g,i)=>
+    '<div class="pauserow gaprow">'+
+      '<div class="field"><label for="gFrom'+i+'">Weg von</label><input type="time" id="gFrom'+i+'" class="gFrom" value="'+(g.from||"")+'"></div>'+
+      '<div class="field"><label for="gTo'+i+'">Zurück um</label><input type="time" id="gTo'+i+'" class="gTo" value="'+(g.to||"")+'"></div>'+
+      '<button class="linkbtn gDel" type="button" data-i="'+i+'" aria-label="Unterbrechung entfernen">✕</button>'+
+    '</div>').join("");
+}
+function readGapRows(){
+  return Array.from($("gapList").querySelectorAll(".gaprow")).map(r=>(
+    {from:r.querySelector(".gFrom").value, to:r.querySelector(".gTo").value}));
 }
 let dayValidationStarted=false;
 const DAY_TIME_FIELDS=["fStart","fEnd","fBStart","fBEnd"];
@@ -1272,18 +1346,32 @@ function dayEntryError(e){
     if(toMin(e.bEnd)<=toMin(e.bStart)) return {message:"Das Pausenende muss nach dem Pausenbeginn liegen.",fields:["fBStart","fBEnd"]};
     if(toMin(e.bStart)<toMin(e.start) || toMin(e.bEnd)>toMin(e.end)) return {message:"Die Pause muss innerhalb der Arbeitszeit liegen.",fields:["fBStart","fBEnd"]};
   }
+  // Unterbrechungen: Index i entspricht der Zeile im Editor (gFrom<i>/gTo<i>)
+  const gaps=e.gaps||[];
+  for(let i=0;i<gaps.length;i++){
+    const g=gaps[i], f=["gFrom"+i,"gTo"+i];
+    if(!g.from || !g.to) return {message:"Für die Unterbrechung bitte beide Zeiten eintragen.",fields:[!g.from&&f[0],!g.to&&f[1]].filter(Boolean)};
+    const gf=toMin(g.from), gt=toMin(g.to);
+    if(gt<=gf) return {message:"Die Rückkehr muss nach dem Weggehen liegen.",fields:f};
+    if(gf<=toMin(e.start) || gt>=toMin(e.end)) return {message:"Die Unterbrechung muss innerhalb der Arbeitszeit liegen.",fields:f};
+    if(e.bStart && e.bEnd && gf<toMin(e.bEnd) && gt>toMin(e.bStart)) return {message:"Pause und Unterbrechung dürfen sich nicht überschneiden.",fields:f.concat(["fBStart","fBEnd"])};
+    for(let j=0;j<i;j++){
+      if(gf<toMin(gaps[j].to) && gt>toMin(gaps[j].from)) return {message:"Zwei Unterbrechungen überschneiden sich.",fields:f};
+    }
+  }
   return null;
 }
 function clearDayFeedback(){
   $("dayFeedback").hidden=true;
   $("breakDecision").hidden=true;
   for(const id of DAY_TIME_FIELDS){ $(id).removeAttribute("aria-invalid"); $(id).removeAttribute("aria-describedby"); }
+  $("gapList").querySelectorAll("input").forEach(el=>{ el.removeAttribute("aria-invalid"); el.removeAttribute("aria-describedby"); });
 }
 function showDayFeedback(message, kind, fields=[]){
   $("dayFeedbackText").textContent=message;
   $("dayFeedback").className="day-feedback "+kind;
   $("dayFeedback").hidden=false;
-  for(const id of fields){ $(id).setAttribute("aria-invalid","true"); $(id).setAttribute("aria-describedby","dayFeedbackText"); }
+  for(const id of fields){ const el=$(id); if(!el) continue; el.setAttribute("aria-invalid","true"); el.setAttribute("aria-describedby","dayFeedbackText"); }
 }
 function updatePreview(){
   clearDayFeedback();
@@ -1311,6 +1399,17 @@ function updatePreview(){
 }
 DAY_TIME_FIELDS.forEach(id=>$(id).addEventListener("input",()=>{dayValidationStarted=true;updatePreview();}));
 $("clearBreak").onclick=()=>{ $("fBStart").value=""; $("fBEnd").value=""; updatePreview(); };
+$("addGap").onclick=()=>{
+  renderGapRows(readGapRows().concat([{from:"",to:""}]));
+  const rows=$("gapList").querySelectorAll(".gFrom"); rows[rows.length-1].focus();
+  updatePreview();
+};
+$("gapList").addEventListener("input",()=>{ dayValidationStarted=true; updatePreview(); });
+$("gapList").addEventListener("click",ev=>{
+  const btn=ev.target.closest(".gDel"); if(!btn) return;
+  const gaps=readGapRows(); gaps.splice(Number(btn.getAttribute("data-i")),1);
+  renderGapRows(gaps); updatePreview();
+});
 
 // Tagestyp-Segment: Klick-Handler
 $("typeSeg").addEventListener("click", ev=>{
@@ -1325,7 +1424,7 @@ function saveDayEntry(allowNoBreak=false){
   updatePreview();
   const error=dayEntryError(e);
   if(error){ $(error.fields[0]).focus(); return; }
-  const suggested=isWork(e) && !e.bStart && !e.bEnd ? fixedBreakFor(e.start,e.end) : null;
+  const suggested=isWork(e) && !e.bStart && !e.bEnd ? fixedBreakFor(e.start,e.end,e.gaps) : null;
   if(suggested && !allowNoBreak){
     const duration=toMin(suggested.bEnd)-toMin(suggested.bStart);
     showDayFeedback("Es ist keine Pause eingetragen. Üblich sind "+duration+" Minuten. Vorschlag: "+suggested.bStart+"–"+suggested.bEnd+". Bitte prüfen.","warning");
@@ -1337,12 +1436,13 @@ function saveDayEntry(allowNoBreak=false){
   const d=parseYmd(editKey), saldo=dayDiff(d,e);
   let message="Gespeichert · Tages-Saldo "+fmtSigned(saldo);
   if(previous && !isOpenDay(previous)) message+=" · Änderung "+fmtSigned(saldo-dayDiff(d,previous));
+  if(e.gaps) e.gaps.sort((a,b)=>toMin(a.from)-toMin(b.from));
   state.entries[editKey]=e; saveState(); hideSheets(); render(); toast(message);
   pushHeartbeat();
 }
 $("saveDay").onclick=()=>saveDayEntry();
 $("applyFixedBreak").onclick=()=>{
-  const e=currentEntry(), fb=fixedBreakFor(e.start,e.end);
+  const e=currentEntry(), fb=fixedBreakFor(e.start,e.end,e.gaps);
   if(!fb || dayEntryError(e)) return;
   $("fBStart").value=fb.bStart; $("fBEnd").value=fb.bEnd;
   updatePreview();
@@ -1546,7 +1646,7 @@ function buildReport(){
       rowSaldoCls='muted';
     } else if(isOpenDay(e)){
       // Angefangener Tag: ohne Ende gibt es keine Bilanz — wie in den Summen
-      eintragCell='<td>'+(e.start||'&ndash;')+' &ndash; ?</td>';
+      eintragCell='<td>'+(e.start||'&ndash;')+' &ndash; ?'+(closedGaps(e).length?' · weg '+gapsText(e):'')+'</td>';
       istStr='&mdash;';
       sollStr=soll>0?fmtDur(soll):'&mdash;';
       saldoStr='&mdash;';
@@ -1559,6 +1659,7 @@ function buildReport(){
         if(e.bStart&&e.bEnd){
           eintragText+=' (&minus;'+fmtDur(toMin(e.bEnd)-toMin(e.bStart))+' Pause)';
         }
+        if(closedGaps(e).length) eintragText+=' · weg '+gapsText(e);
       } else {
         eintragText='&mdash;';
       }
@@ -1974,8 +2075,13 @@ pushHeartbeat(); // initialer Heartbeat — Funktion ist hier (im selben Block) 
 (function () {
 
   /* ---- Versionsdaten ---- */
-  const APP_VERSION = 10;
+  const APP_VERSION = 11;
   const WHATS_NEW = [
+    { v: 11, items: [
+      "Zweites Kommen: Nach dem Feierabend gibt es den Knopf „Wieder kommen“ – etwa wenn du zwischendurch kurz weg musstest",
+      "Die Zeit dazwischen wird minutengenau als Unterbrechung abgezogen, die 30 Minuten Pause zusätzlich",
+      "Unterbrechungen lassen sich im Tag auch von Hand eintragen und ändern"
+    ]},
     { v: 10, items: [
       "Erinnerungen bleiben bei einer hängenden Textabfrage nicht mehr aus: Nach fünf Sekunden erscheint eine allgemeine Meldung",
       "Zwei Tests in den Einstellungen unterscheiden die Anzeige auf dem Gerät vom Versand über den Server; das Ergebnis bleibt lesbar"

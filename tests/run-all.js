@@ -15,6 +15,7 @@ const SUITES = [
   ["test-corrections.js", "Korrekturen, Pausenpruefung und Push-Anmeldung"],
   ["test-openday.js", "Laufender Tag & Summen"],
   ["test-stamp.js", "Stempeluhr"],
+  ["test-return.js", "Wieder kommen & Unterbrechungen"],
   ["test-fixedbreak.js", "Feste Pause"],
   ["test-reminders.js", "Erinnerungen & Heartbeat"],
   ["test-worker.mjs", "Worker-Logik (ohne Browser)"]
