@@ -19,7 +19,8 @@ const SUITES = [
   ["test-themes.js", "Aussehen (Themes)"],
   ["test-fixedbreak.js", "Feste Pause"],
   ["test-reminders.js", "Erinnerungen & Heartbeat"],
-  ["test-worker.mjs", "Worker-Logik (ohne Browser)"]
+  ["test-worker.mjs", "Worker-Logik (ohne Browser)"],
+  ["test-saison-icon.mjs", "Weihnachts-Icon (Datumsregel, Manifest, Seite)"]
 ];
 
 function serverLaeuft() {

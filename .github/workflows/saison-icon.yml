@@ -1,0 +1,56 @@
+# Stellt das App-Icon vom 1. bis 26. Dezember auf das Weihnachts-Icon um und danach zurueck.
+# Laeuft taeglich und aendert nur etwas, wenn das Manifest nicht zum Datum passt
+# (ein ausgefallener Lauf wird so am naechsten Tag nachgeholt).
+#
+# Hinweis: GitHub schaltet Zeitplaene in oeffentlichen Repos ab, wenn 60 Tage lang
+# nichts im Repo passiert. Dann unter "Actions" wieder einschalten.
+name: Saison-Icon
+
+on:
+  schedule:
+    - cron: "10 23 * * *"   # 00:10 Uhr MEZ
+    - cron: "10 5 * * *"    # Sicherheitsnetz am Morgen
+  workflow_dispatch:
+    inputs:
+      modus:
+        description: "auto = nach Datum, sonst erzwingen"
+        type: choice
+        options: [auto, weihnachten, normal]
+        default: auto
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency: saison-icon
+
+jobs:
+  umstellen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Icon passend zum Datum setzen
+        env:
+          MODUS: ${{ inputs.modus || 'auto' }}
+        run: node tools/saison-icon.mjs --mode "$MODUS"
+
+      - name: Aenderung veroeffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- manifest.json; then
+            echo "Manifest passt zum Datum, nichts zu tun."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if grep -q '"./icons/xmas/' manifest.json; then
+            git commit -m "Saison-Icon: Weihnachts-Icon an" manifest.json
+          else
+            git commit -m "Saison-Icon: zurueck zum normalen Icon" manifest.json
+          fi
+          git push
+          # Pushes mit dem Workflow-Token stossen den Pages-Build nicht verlaesslich an,
+          # deshalb ausdruecklich anfordern.
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds"

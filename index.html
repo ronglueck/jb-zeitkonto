@@ -998,6 +998,14 @@ function applyTheme(){
   const cs=document.querySelector('meta[name="color-scheme"]'); if(cs) cs.setAttribute("content", DARK_THEMES[t] ? "dark" : "light");
   document.querySelectorAll("[data-theme-opt]").forEach(b=>
     b.setAttribute("aria-checked", b.getAttribute("data-theme-opt")===t ? "true" : "false"));
+  const ati=document.querySelector('link[rel="apple-touch-icon"]'); if(ati) ati.setAttribute("href", seasonIconUrl());
+}
+// Weihnachts-Icon vom 1. bis 26. Dezember (Benachrichtigungen, iPhone-Startbildschirm).
+// Das Android-Startbildschirm-Icon stellt tools/saison-icon.mjs im Manifest um;
+// dieselbe Regel steht dort und in sw.js (seasonIcon).
+function seasonIconUrl(d){
+  d=d||new Date();
+  return (d.getMonth()===11 && d.getDate()<=26) ? "./icons/xmas/icon-192.png" : "./icons/icon-192.png";
 }
 applyTheme();
 
@@ -2395,7 +2403,7 @@ async function testLocalNotification() {
     }
     await reg.showNotification("Zeitkonto – Anzeigetest", {
       body: "Lokaler Test: Die Benachrichtigungsanzeige auf diesem Gerät funktioniert.",
-      icon: "./icons/icon-192.png",
+      icon: seasonIconUrl(),
       badge: "./icons/icon-192.png",
       tag: "zeitkonto-local-test",
       renotify: true,

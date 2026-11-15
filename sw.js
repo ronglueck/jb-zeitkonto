@@ -59,7 +59,24 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Übrige same-origin GET (Icons, Manifest): stale-while-revalidate
+  // Manifest: network-first. Aus dem Cache bekäme Android einen Icon-Wechsel
+  // (Weihnachts-Icon, tools/saison-icon.mjs) erst bei der übernächsten Prüfung mit.
+  if (req.url.startsWith(self.location.origin) && new URL(req.url).pathname.endsWith("/manifest.json")) {
+    event.respondWith(
+      fetch(req).then(resp => {
+        if (resp.ok) {
+          const copy = resp.clone();
+          caches.open(CACHE).then(cache => cache.put(req, copy));
+        }
+        return resp;
+      }).catch(() =>
+        caches.open(CACHE).then(cache => cache.match(req)).then(cached => cached || Response.error())
+      )
+    );
+    return;
+  }
+
+  // Übrige same-origin GET (Icons, Bilder): stale-while-revalidate
   if (req.url.startsWith(self.location.origin)) {
     event.respondWith(
       caches.open(CACHE).then(cache =>
@@ -186,13 +203,20 @@ async function currentKind() {
   }
 }
 
+// Weihnachts-Icon vom 1. bis 26. Dezember. Dieselbe Regel steht in
+// tools/saison-icon.mjs (Startbildschirm-Icon) und index.html (seasonIconUrl).
+function seasonIcon(d) {
+  d = d || new Date();
+  return (d.getMonth() === 11 && d.getDate() <= 26) ? "./icons/xmas/icon-192.png" : "./icons/icon-192.png";
+}
+
 self.addEventListener("push", event => {
   event.waitUntil((async () => {
     const kind = await currentKind();
     const r = REMINDERS[kind] || REMINDERS.unbekannt;
     await self.registration.showNotification(r.title, {
       body: r.body,
-      icon: "./icons/icon-192.png",
+      icon: seasonIcon(),
       badge: "./icons/icon-192.png",
       tag: "zeitkonto-reminder",
       renotify: true,
